@@ -175,7 +175,7 @@ def test_1d_row_and_col():
 
 def test_1d_tocsc_tocsr_todia_todok():
     res = coo_array([1, -2, -3])
-    for f in [res.tocsc, res.tocsr, res.todok, res.todia]:
+    for f in [res.tocsc, res.tocsr, res.todia]:
         with pytest.raises(ValueError, match='Cannot convert'):
             f()
 

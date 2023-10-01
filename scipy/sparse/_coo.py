@@ -394,12 +394,17 @@ class _coo_base(_data_matrix, _minmax_mixin):
         if self.nnz == 0:
             return self._csc_container(self.shape, dtype=self.dtype)
         else:
-            M,N = self.shape
+            N = self.shape[-1]
             idx_dtype = self._get_index_dtype(
-                (self.col, self.row), maxval=max(self.nnz, M)
+                self.indices, maxval=max(self.nnz, N)
             )
-            row = self.row.astype(idx_dtype, copy=False)
-            col = self.col.astype(idx_dtype, copy=False)
+            col = self.indices[-1].astype(idx_dtype, copy=False)
+            if self.ndim == 1:
+                row = np.zeros(N, dtype = idx_dtype)
+                M = 1
+            else:
+                row = self.indices[-2].astype(idx_dtype, copy=False)
+                M = self.shape[-2]
 
             indptr = np.empty(N + 1, dtype=idx_dtype)
             indices = np.empty_like(row, dtype=idx_dtype)
@@ -438,12 +443,17 @@ class _coo_base(_data_matrix, _minmax_mixin):
         if self.nnz == 0:
             return self._csr_container(self.shape, dtype=self.dtype)
         else:
-            M,N = self.shape
+            N = self.shape[-1]
             idx_dtype = self._get_index_dtype(
-                (self.row, self.col), maxval=max(self.nnz, N)
+                self.indices, maxval=max(self.nnz, N)
             )
-            row = self.row.astype(idx_dtype, copy=False)
-            col = self.col.astype(idx_dtype, copy=False)
+            col = self.indices[-1].astype(idx_dtype, copy=False)
+            if self.ndim == 1:
+                row = np.zeros(N, dtype = idx_dtype)
+                M = 1
+            else:
+                row = self.indices[-2].astype(idx_dtype, copy=False)
+                M = self.shape[-2]
 
             indptr = np.empty(M + 1, dtype=idx_dtype)
             indices = np.empty_like(col, dtype=idx_dtype)
@@ -489,12 +499,13 @@ class _coo_base(_data_matrix, _minmax_mixin):
     todia.__doc__ = _spbase.todia.__doc__
 
     def todok(self, copy=False):
-        if self.ndim != 2:
-            raise ValueError("Cannot convert a 1d sparse array to dok format")
         self.sum_duplicates()
         dok = self._dok_container((self.shape), dtype=self.dtype)
-        dok._update(zip(zip(self.row,self.col),self.data))
-
+        if self.ndim == 1:
+            indices = self.indices[0]
+        else:
+            indices = ((x[0] if len(x) == 1 else x) for x in zip(*self.indices))
+        dok._update(zip(indices, self.data))
         return dok
 
     todok.__doc__ = _spbase.todok.__doc__

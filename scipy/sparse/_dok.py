@@ -74,14 +74,16 @@ class _dok_base(_spbase, IndexMixin):
 
     def __init__(self, arg1, shape=None, dtype=None, copy=False):
         _spbase.__init__(self)
-        self._dict = {}
+        self._dict = sd = {}
 
         self.dtype = getdtype(dtype, default=float)
         allow_ndim = isinstance(self, sparray)
         if isinstance(arg1, tuple):
+            print("About to check shape: ", arg1)
             if isshape(arg1, allow_ndim=allow_ndim):
                 self._shape = check_shape(arg1, allow_ndim=allow_ndim)
         elif issparse(arg1):  # Sparse ctor
+            print("sparse dude!")
             if arg1.format == self.format:
                 if copy:
                     arg1 = arg1.copy()
@@ -91,8 +93,8 @@ class _dok_base(_spbase, IndexMixin):
             if dtype is not None:
                 arg1 = arg1.astype(dtype, copy=False)
 
-            self._dict.update(arg1._dict)
-            self._shape = check_shape(arg1.shape)
+            sd.update(arg1._dict)
+            self._shape = check_shape(arg1.shape, allow_ndim=allow_ndim)
             self.dtype = arg1.dtype
         else:  # Dense ctor
             try:
@@ -103,10 +105,20 @@ class _dok_base(_spbase, IndexMixin):
             if len(arg1.shape) > 2:
                 raise TypeError('Expected rank <=2 dense array or matrix.')
 
-            d = self._coo_container(arg1, dtype=dtype).todok()
-            self._dict.update(d._dict)
-            self._shape = check_shape(arg1.shape)
-            self.dtype = d.dtype
+            print("Hey There! arg1: ", arg1)
+            print(f"Hey There more! shape: {shape}; dtype: {dtype}; copy: {copy}")
+            if arg1.ndim == 1:
+                if dtype is not None:
+                    arg1 = arg1.astype(dtype)
+                sd.update((i, v) for i, v in enumerate(arg1.ravel()) if v != 0)
+                self.dtype = arg1.dtype
+            else:
+                d = self._coo_container(arg1, dtype=dtype).todok()
+                sd.update(d._dict)
+                self.dtype = d.dtype
+            self._shape = check_shape(arg1.shape, allow_ndim=allow_ndim)
+        print(f"created: shape {self.shape}; dtype {self.dtype}; dict {sd}")
+        print(f"arg:{arg1}")
 
     def update(self, val):
         # Prevent direct usage of update
@@ -180,12 +192,15 @@ class _dok_base(_spbase, IndexMixin):
         return self._get_array(i_range)
 
     def _get_array(self, idx):
-        idx = idx.squeeze()
-        new_dok = self._dok_container((len(idx),), dtype=self.dtype)
+        print("inside _dok._get_array. idx: ", idx)
+        idx = np.asarray(idx).squeeze()
+        print("idx : ", idx, "of type: ",type(idx), repr(idx), "; shape: ", idx.shape)
+        new_dok = self._dok_container(idx.shape, dtype=self.dtype)
         for i, x in enumerate(idx):
             v = self._dict.get(x, 0)
             if v:
                 new_dok._dict[i] = v
+        print("new_dok: ", new_dok._dict, "; shape: ", new_dok.shape)
         return new_dok
 
     # 2D get methods 
@@ -307,8 +322,18 @@ class _dok_base(_spbase, IndexMixin):
             res_dtype = upcast_scalar(self.dtype, other)
             new = self._dok_container(self.shape, dtype=res_dtype)
             # Add this scalar to every element.
-            for key in itertools.product(*map(range, self.shape)):
+            print("before add scalar copy", repr(self))
+            p = self.copy()
+            print("after copy ", repr(p))
+            print(list(map(range, self.shape)))
+            print("full _dict is: ", self._dict)
+            if self.ndim == 1:
+                keys = range(self.shape[0])
+            else:
+                keys = itertools.product(*map(range, self.shape))
+            for key in keys:
                 aij = self._dict.get(key, 0) + other
+                print("adding!!  key: ", key, " value: ", self._dict.get(key,0))
                 if aij:
                     new[key] = aij
             # new.dtype.char = self.dtype.char
@@ -325,7 +350,10 @@ class _dok_base(_spbase, IndexMixin):
                     )
             else:
                 o_coo = other.tocoo()
-                o_coo_data = zip(zip(*o_coo.indices), o_coo.data)
+                if other.ndim == 1:
+                    o_coo_data = zip(o_coo.indices[0], o_coo.data)
+                else:
+                    o_coo_data = zip(zip(*o_coo.indices), o_coo.data)
                 with np.errstate(over='ignore'):
                     new._dict.update(
                         (k, new[k] + o_value) for k, o_value in o_coo_data
@@ -356,36 +384,74 @@ class _dok_base(_spbase, IndexMixin):
 
     def _mul_vector(self, other):
         sd = self._dict
+        res_dtype = upcast(self.dtype, other.dtype)
         # vector * vector
+        print("vector * vector")
         if self.ndim == 1:
             if issparse(other):
                 if other.format == "dok":
                     shared_keys = sd.keys() & other._dict.keys()
-                    return sum(sd[k] * other._dict[k] for k in shared_keys)
-                o_coo = other.tocoo()
-                shared_keys = sd.keys() & o_coo.indices[0]
-                return sum(sd[k] * other.data[k] for k in shared_keys)
+                else:
+                    o_coo = other.tocoo()
+                    shared_keys = sd.keys() & o_coo.indices[0]
+                return np.array([sd[k] * other._dict[k] for k in shared_keys]).sum(dtype=res_dtype)
             elif isdense(other):
-                return sum(other[k] * v for k, v in sd.items())
+                return np.array([other[k] * v for k, v in sd.items()]).sum(dtype=res_dtype)
 
         # matrix * vector
-        result = np.zeros(self.shape[0], dtype=upcast(self.dtype, other.dtype))
+        result = np.zeros(self.shape[0], dtype=res_dtype)
         for (i, j), v in sd.items():
             result[i] += v * other[j]
         return result
 
     def _mul_multivector(self, other):
+        result_dtype = upcast(self.dtype, other.dtype)
         # vector * multivector
         if self.ndim == 1:
-            return other.T._mul_multivector(self)
+            if other.ndim == 1:
+                result_shape = ()
+                result = np.zeros(result_shape, dtype=result_dtype)
+                for j, v in self._dict.items():
+                    result += v * other[j]
+            else:
+                result_shape = (other.shape[1],)
+                result = np.zeros(result_shape, dtype=result_dtype)
+                for j, v in self._dict.items():
+                    result[:] += v * other[j,:]
+            return result
 
         # matrix * multivector
-        result_shape = (self.shape[0], other.shape[1])
-        result_dtype = upcast(self.dtype, other.dtype)
-        result = np.zeros(result_shape, dtype=result_dtype)
-        for (i, j), v in self.items():
-            result[i,:] += v * other[j,:]
+        print(" matrix * multivector")
+        if other.ndim == 1:
+#            print("inside other.ndim==1")
+            result_shape = (self.shape[0],)
+            result = np.zeros(result_shape, dtype=result_dtype)
+#            print("result set up:", result)
+            for (i, j), v in self.items():
+#                print("getting other[j]. j:", j)
+#                print("getting other[j]. other._dict:", other._dict)
+                result[i] += v * other[j]
+#            print("result should be ready:", result)
+        else:
+            result_shape = (self.shape[0], other.shape[1])
+            result = np.zeros(result_shape, dtype=result_dtype)
+            for (i, j), v in self.items():
+                result[i,:] += v * other[j,:]
         return result
+
+#    def _mul_sparse_matrix(self, other):
+#        print("inside mul_sparse_matrix")
+#        if self.ndim == 1:
+#            result_dtype = upcast(self.dtype, other.dtype)
+#            oN = other.shape[1]
+##            print("ndim==1: Reverse the Multiply")
+##            print("other.T", other.T, "shape", other.T.shape)
+##            print(other.T._mul_multivector)
+#            result = np.zeros((oN), dtype=result_dtype)
+#            result = other.T._mul_sparse_matrix(self)
+##            print("Got the result in _mul_sparse_matrix:", result)
+#            return result
+#        return self.tocsr()._mul_sparse_matrix(other)
 
     def __imul__(self, other):
         if isscalarlike(other):
@@ -399,9 +465,6 @@ class _dok_base(_spbase, IndexMixin):
             new = self._dok_container(self.shape, dtype=res_dtype)
             new._dict.update(((k, v / other) for k, v in self._dict.items()))
             return new
-        if self.ndim == 1:
-            # TODO implement 1d truediv
-            raise NotImplementedError
         return self.tocsr() / other
 
     def __itruediv__(self, other):
@@ -460,6 +523,7 @@ class _dok_base(_spbase, IndexMixin):
         idx_dtype = self._get_index_dtype(maxval=max(self.shape))
         data = np.fromiter(sd.values(), dtype=self.dtype, count=nnz)
         if self.ndim == 1:
+            print("in dok.tocoo. This is self._dict: ", sd)
             indices = (np.fromiter(sd, dtype = idx_dtype, count=nnz),)
         else:
             row = np.fromiter((i for i, _ in sd), dtype=idx_dtype, count=nnz)
@@ -488,7 +552,8 @@ class _dok_base(_spbase, IndexMixin):
     tocsc.__doc__ = _spbase.tocsc.__doc__
 
     def resize(self, *shape):
-        shape = check_shape(shape)
+        is_array = isinstance(self, sparray)
+        shape = check_shape(shape, allow_ndim=is_array)
         if len(shape) != len(self.shape):
             # TODO implement resize across dimensions
             raise NotImplementedError
@@ -498,6 +563,9 @@ class _dok_base(_spbase, IndexMixin):
             for i in list(self._dict):
                 if i >= newM:
                     del self._dict[i]
+            self._shape = shape
+            return
+
         newM, newN = shape
         M, N = self.shape
         if newM < M or newN < N:
@@ -508,6 +576,17 @@ class _dok_base(_spbase, IndexMixin):
         self._shape = shape
 
     resize.__doc__ = _spbase.resize.__doc__
+
+    def astype(self, dtype, casting='unsafe', copy=True):
+        dtype = np.dtype(dtype)
+        if self.dtype != dtype:
+            result = self._dok_container(self.shape, dtype=dtype)
+            data = np.array(list(self._dict.values()), dtype=dtype)
+            result._update(zip(self._dict, data))
+            return result
+        elif copy:
+            return self.copy()
+        return self
 
 
 def isspmatrix_dok(x):
