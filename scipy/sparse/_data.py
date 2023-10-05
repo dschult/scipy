@@ -113,6 +113,10 @@ class _data_matrix(_spbase):
         """
         if not isscalarlike(n):
             raise NotImplementedError("input is not scalar")
+        if not n:
+            raise ValueError("zero power makes all ones (dense).\n"
+                "Use `np.ones(A.shape, dtype=A.dtype)` for this case.")
+
 
         data = self._deduped_data()
         if dtype is not None:
@@ -198,8 +202,11 @@ class _minmax_mixin:
                               "an 'out' parameter.")
 
         validateaxis(axis)
+        if self.ndim == 1:
+            if axis not in (None, 0, -1):
+                raise ValueError("axis out of range")
 
-        if axis is None:
+        if axis is None or self.ndim == 1:
             if 0 in self.shape:
                 raise ValueError("zero-size array to reduction operation")
 
@@ -209,25 +216,46 @@ class _minmax_mixin:
             m = min_or_max.reduce(self._deduped_data().ravel())
             if self.nnz != np.prod(self.shape):
                 m = min_or_max(zero, m)
+            if self.ndim == 1 and axis in (0, -1):
+                return self._coo_container(([m], (np.zeros(1),)),
+                                           dtype=self.dtype, shape=(1,))
             return m
 
         if axis < 0:
-            axis += 2
-
-        if (axis == 0) or (axis == 1):
-            return self._min_or_max_axis(axis, min_or_max)
-        else:
+            axis += self.ndim
+        if axis >= self.ndim:
             raise ValueError("axis out of range")
 
+        return self._min_or_max_axis(axis, min_or_max)
+
     def _arg_min_or_max_axis(self, axis, argmin_or_argmax, compare):
+        if axis < 0:
+            axis += self.ndim
+        if axis >= self.ndim:
+            raise ValueError("axis out of range")
+
+        zero = self.dtype.type(0)
+
+        if self.ndim == 1:
+            if self.format == "coo":
+                indices = self.indices[0]
+            elif self.format in ("csr", "csc"):
+                indices = self.indices
+            else:
+                mat = self.tocsr()
+                indices = mat.indices
+            extreme_index = argmin_or_argmax(self.data)
+            extreme_value = self.data[extreme_index]
+            if compare(extreme_value, zero) or self.nnz == self.shape[-1]:
+                return indices[extreme_index]
+            zero_ind = _find_missing_index(indices, self.shape[0])
+            if extreme_value == zero:
+                return min(extreme_index, zero_ind)
+            return zero_ind
+
         if self.shape[axis] == 0:
             raise ValueError("Can't apply the operation along a zero-sized "
                              "dimension.")
-
-        if axis < 0:
-            axis += 2
-
-        zero = self.dtype.type(0)
 
         mat = self.tocsc() if axis == 0 else self.tocsr()
         mat.sum_duplicates()
@@ -261,6 +289,8 @@ class _minmax_mixin:
             raise ValueError("Sparse types do not support an 'out' parameter.")
 
         validateaxis(axis)
+        if self.ndim == 1 and axis not in (None, 0, -1):
+            raise ValueError("axis out of range")
 
         if axis is not None:
             return self._arg_min_or_max_axis(axis, argmin_or_argmax, compare)
@@ -271,13 +301,14 @@ class _minmax_mixin:
         if self.nnz == 0:
             return 0
 
+        num_col = self.shape[-1] if self.ndim > 1 else 1
+
         zero = self.dtype.type(0)
         mat = self.tocoo()
         # Convert to canonical form: no duplicates, sorted indices.
         mat.sum_duplicates()
         extreme_index = argmin_or_argmax(mat.data)
         extreme_value = mat.data[extreme_index]
-        num_row, num_col = mat.shape
 
         # If the min value is less than zero, or max is greater than zero,
         # then we don't need to worry about implicit zeros.
@@ -287,7 +318,7 @@ class _minmax_mixin:
                     int(mat.col[extreme_index]))
 
         # Cheap test for the rare case where we have no implicit zeros.
-        size = num_row * num_col
+        size = np.prod(self.shape)
         if size == mat.nnz:
             return (int(mat.row[extreme_index]) * num_col +
                     int(mat.col[extreme_index]))
