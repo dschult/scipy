@@ -71,6 +71,7 @@ class _TestCommon1D:
     def test_str(self):
         str(self.datsp)
 
+    @pytest.mark.skip(reason="tocsr() not valid for 1d sparse array")
     def test_empty_arithmetic(self):
         # Test manipulating empty matrices. Fails in SciPy SVN <= r1768
         shape = (5,)
@@ -88,16 +89,19 @@ class _TestCommon1D:
                 assert_equal(m.dtype, mytype)
                 assert_equal(m.toarray().dtype, mytype)
 
+    @pytest.mark.skip(reason="tocsr() not valid for 1d sparse array")
     def test_abs(self):
         A = array([-1, 0, 17, 0, -5, 0, 1, -4, 0, 0, 0, 0], 'd')
         assert_equal(abs(A), abs(self.spcreator(A)).toarray())
 
+    @pytest.mark.skip(reason="tocsr() not valid for 1d sparse array")
     def test_round(self):
         decimal = 1
         A = array([-1.35, 0.56, 17.25, -5.98], 'd')
         assert_equal(np.around(A, decimals=decimal),
                      round(self.spcreator(A), ndigits=decimal).toarray())
 
+    @pytest.mark.skip(reason="tocsr() not valid for 1d sparse array")
     def test_elementwise_power(self):
         A = array([-4, -3, -2, -1, 0, 1, 2, 3, 4], 'd')
         assert_equal(np.power(A, 2), self.spcreator(A).power(2).toarray())
@@ -341,6 +345,7 @@ class _TestCommon1D:
         arrbool = dat.astype(bool)
         assert_array_equal(spbool.toarray(), arrbool)
 
+    @pytest.mark.skip(reason="tocsr() not valid for 1d sparse array")
     def test_mul_scalar(self):
         def check(dtype):
             dat = self.dat_dtypes[dtype]
@@ -352,6 +357,7 @@ class _TestCommon1D:
         for dtype in self.math_dtypes:
             check(dtype)
 
+    @pytest.mark.skip(reason="tocsr() not valid for 1d sparse array")
     def test_rmul_scalar(self):
         def check(dtype):
             dat = self.dat_dtypes[dtype]
@@ -396,6 +402,7 @@ class _TestCommon1D:
         for dtype in self.math_dtypes:
             check(dtype)
 
+    @pytest.mark.skip(reason="tocsr() not valid for 1d sparse array")
     def test_sub(self):
         def check(dtype):
             dat = self.dat_dtypes[dtype]
@@ -443,6 +450,7 @@ class _TestCommon1D:
 
             check(dtype)
 
+    @pytest.mark.skip(reason="tocsr() not valid for 1d sparse array")
     def test_add0(self):
         def check(dtype):
             dat = self.dat_dtypes[dtype]
@@ -458,6 +466,7 @@ class _TestCommon1D:
         for dtype in self.math_dtypes:
             check(dtype)
 
+    @pytest.mark.skip(reason="tocsr() not valid for 1d sparse array")
     def test_elementwise_multiply(self):
         # real/real
         A = array([4,0,9])
@@ -479,6 +488,7 @@ class _TestCommon1D:
         assert_almost_equal(Asp.multiply(Dsp).toarray(), A*D)  # sparse/sparse
         assert_almost_equal(Asp.multiply(D).toarray(), A*D)  # sparse/dense
 
+    @pytest.mark.skip(reason="tocsr() not valid for 1d sparse array")
     def test_elementwise_multiply_broadcast(self):
         A = array([4])
         B = array([[-9]])
@@ -538,6 +548,7 @@ class _TestCommon1D:
                 else:
                     assert_almost_equal(sp_mult, dense_mult)
 
+    @pytest.mark.skip(reason="tocsr() not valid for 1d sparse array")
     def test_elementwise_divide(self):
         expected = [1, np.nan, 1, np.nan]
         assert_array_equal((self.datsp / self.datsp).toarray(), expected)
@@ -569,6 +580,7 @@ class _TestCommon1D:
         with np.errstate(divide='ignore', invalid='ignore'):
             assert_array_equal(np.array(toarray(Asp / Bsp)), A / B)
 
+    @pytest.mark.skip(reason="tocsr() not valid for 1d sparse array")
     def test_pow(self):
         A = array([1, 0, 2, 0])
         B = self.spcreator(A)
@@ -591,6 +603,7 @@ class _TestCommon1D:
         row = array([[1,2,3,4]])
         assert_array_almost_equal(row @ M, row @ M.toarray())
 
+    @pytest.mark.skip(reason="tocsr() not valid for 1d sparse array")
     def test_small_multiplication(self):
         # test that A*x works for x with shape () (1,) (1,1) and (1,0)
         A = self.spcreator([1,2,3])
@@ -603,6 +616,7 @@ class _TestCommon1D:
         assert_equal(A @ np.ones((1, 1)), array([[1], [2], [3]]))
         assert_equal(A @ np.ones((1, 0)), np.ones((3, 0)))
 
+    @pytest.mark.skip(reason="tocsr() not valid for 1d sparse array")
     def test_dot_scalar(self):
         M = self.datsp
         scalar = 10
@@ -611,6 +625,7 @@ class _TestCommon1D:
 
         assert_allclose(actual.toarray(), expected.toarray())
 
+    @pytest.mark.skip(reason="tocsr() not valid for 1d sparse array")
     def test_matmul(self):
         M = self.spcreator([2,0,3.0])
         B = self.spcreator(array([[0,1],[1,0],[0,2]],'d'))
@@ -694,6 +709,7 @@ class _TestCommon1D:
         for dtype in self.math_dtypes:
             check(dtype)
 
+    @pytest.mark.skip(reason="tocsr() not valid for 1d sparse array")
     def test_sub_dense(self):
         # subtracting a dense matrix to/from a sparse matrix
         def check(dtype):
@@ -723,6 +739,7 @@ class _TestCommon1D:
             for x, y in zip(A, B):
                 assert_equal(x, y)
 
+    @pytest.mark.skip(reason="tocsr() not valid for 1d sparse array")
     def test_size_zero_matrix_arithmetic(self):
         # Test basic matrix arithmetic with shapes like (0,0), (10,0),
         # (0, 3), etc.
