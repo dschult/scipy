@@ -576,7 +576,7 @@ class _TestCommon1D:
         # unusual exponents
         with pytest.raises(ValueError, match='negative integer powers'):
             B ** -1
-        with pytest.raises(ValueError, match='zero power'):
+        with pytest.raises(NotImplementedError, match='zero power'):
             B ** 0
 
         for exponent in [1, 2, 3, 2.2]:
