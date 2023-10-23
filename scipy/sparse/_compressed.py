@@ -7,7 +7,7 @@ import operator
 import numpy as np
 from scipy._lib._util import _prune_array
 
-from ._base import _spbase, issparse, SparseEfficiencyWarning
+from ._base import _spbase, issparse, sparray, SparseEfficiencyWarning
 from ._data import _data_matrix, _minmax_mixin
 from . import _sparsetools
 from ._sparsetools import (get_csr_submatrix, csr_sample_offsets, csr_todense,
@@ -86,7 +86,8 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
 
         # Read matrix dimensions given, if any
         if shape is not None:
-            self._shape = check_shape(shape)
+            is_array = isinstance(self, sparray)
+            self._shape = check_shape(shape, allow_ndim=is_array)
         else:
             if self.shape is None:
                 # shape not already set, try to infer dimensions
@@ -107,6 +108,10 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
     def _getnnz(self, axis=None):
         if axis is None:
             return int(self.indptr[-1])
+        elif self.ndim == 1:
+            if axis in (0, -1):
+                return int(self.indptr[-1])
+            raise ValueError('axis out of bounds')
         else:
             if axis < 0:
                 axis += 2
@@ -377,45 +382,52 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
                 other = self.__class__(other)
                 return self._binopt(other, '_elmul_')
             # Single element.
-            elif other.shape == (1, 1):
+            if other.shape == (1, 1):
                 return self._mul_scalar(other.toarray()[0, 0])
-            elif self.shape == (1, 1):
+            if other.shape == (1,):
+                return self._mul_scalar(other.toarray()[0])
+            if self.shape == (1, 1):
                 return other._mul_scalar(self.toarray()[0, 0])
+            if self.shape == (1,):
+                return other._mul_scalar(self.toarray()[0])
+            # get shapes from 1d or 2d arrays
+            *_, sM, sN = (1, 1) + self.shape
+            *_, oM, oN = (1, 1) + other.shape
             # A row times a column.
-            elif self.shape[1] == 1 and other.shape[0] == 1:
-                return self._mul_sparse_matrix(other.tocsc())
-            elif self.shape[0] == 1 and other.shape[1] == 1:
+            if sM == 1 and oN == 1:
                 return other._mul_sparse_matrix(self.tocsc())
+            if sN == 1 and oM == 1:
+                return self._mul_sparse_matrix(other.tocsc())
             # Row vector times matrix. other is a row.
-            elif other.shape[0] == 1 and self.shape[1] == other.shape[1]:
-                other = self._dia_container(
-                    (other.toarray().ravel(), [0]),
-                    shape=(other.shape[1], other.shape[1])
-                )
-                return self._mul_sparse_matrix(other)
+            if oM == 1 and sN == oN:
+                # build diagonal csc_array/csr_array => self._csr_container
+                data = other.toarray().ravel()
+                indptr = np.arange(oN + 1)
+                indices = indptr[:-1]
+                new_other = self._csr_container((data, indices, indptr))
+                return self._mul_sparse_matrix(new_other)
             # self is a row.
-            elif self.shape[0] == 1 and self.shape[1] == other.shape[1]:
-                copy = self._dia_container(
-                    (self.toarray().ravel(), [0]),
-                    shape=(self.shape[1], self.shape[1])
-                )
+            if sM == 1 and sN == oN:
+                data = self.toarray().ravel()
+                indptr = np.arange(oN + 1)
+                indices = indptr[:-1]
+                copy = self._csr_container((data, indices, indptr))
                 return other._mul_sparse_matrix(copy)
             # Column vector times matrix. other is a column.
-            elif other.shape[1] == 1 and self.shape[0] == other.shape[0]:
-                other = self._dia_container(
-                    (other.toarray().ravel(), [0]),
-                    shape=(other.shape[0], other.shape[0])
-                )
-                return other._mul_sparse_matrix(self)
+            if oN == 1 and sM == oM:
+                data = other.toarray().ravel()
+                indptr = np.arange(oM + 1)
+                indices = indptr[:-1]
+                new_other = self._csr_container((data, indices, indptr))
+                return new_other._mul_sparse_matrix(self)
             # self is a column.
-            elif self.shape[1] == 1 and self.shape[0] == other.shape[0]:
-                copy = self._dia_container(
-                    (self.toarray().ravel(), [0]),
-                    shape=(self.shape[0], self.shape[0])
-                )
+            if sN == 1 and sM == oM:
+                data = self.toarray().ravel()
+                indptr = np.arange(oM + 1)
+                indices = indptr[:-1]
+                copy = self._csr_container((data, indices, indptr))
                 return copy._mul_sparse_matrix(other)
-            else:
-                raise ValueError("inconsistent shapes")
+            raise ValueError("inconsistent shapes")
 
         # Assume other is a dense matrix/array, which produces a single-item
         # object array if other isn't convertible to ndarray.
@@ -427,18 +439,22 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
         if other.size == 1:
             return self._mul_scalar(other.flat[0])
         # Fast case for trivial sparse matrix.
-        elif self.shape == (1, 1):
+        if self.shape == (1, 1):
             return np.multiply(self.toarray()[0, 0], other)
+        if self.shape == (1,):
+            return np.multiply(self.toarray()[0], other)
 
         ret = self.tocoo()
         # Matching shapes.
         if self.shape == other.shape:
             data = np.multiply(ret.data, other[ret.row, ret.col])
+            ret.data = data.view(np.ndarray).ravel()
+            return ret
         # Sparse row vector times...
-        elif self.shape[0] == 1:
+        if self.shape[0] == 1 or self.ndim == 1:
             if other.shape[1] == 1:  # Dense column vector.
                 data = np.multiply(ret.data, other)
-            elif other.shape[1] == self.shape[1]:  # Dense matrix.
+            elif other.shape[1] == self.shape[-1]:  # Dense matrix.
                 data = np.multiply(ret.data, other[:, ret.col])
             else:
                 raise ValueError("inconsistent shapes")
@@ -446,11 +462,11 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
             col = np.tile(ret.col, other.shape[0])
             return self._coo_container(
                 (data.view(np.ndarray).ravel(), (row, col)),
-                shape=(other.shape[0], self.shape[1]),
+                shape=(other.shape[0], self.shape[-1]),
                 copy=False
             )
         # Sparse column vector times...
-        elif self.shape[1] == 1:
+        if self.shape[1] == 1:
             if other.shape[0] == 1:  # Dense row vector.
                 data = np.multiply(ret.data[:, None], other)
             elif other.shape[0] == self.shape[0]:  # Dense matrix.
@@ -465,7 +481,7 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
                 copy=False
             )
         # Sparse matrix times dense row vector.
-        elif other.shape[0] == 1 and self.shape[1] == other.shape[1]:
+        if other.shape[0] == 1 and self.shape[1] == other.shape[1]:
             data = np.multiply(ret.data, other[:, ret.col].ravel())
         # Sparse matrix times dense column vector.
         elif other.shape[1] == 1 and self.shape[0] == other.shape[0]:
