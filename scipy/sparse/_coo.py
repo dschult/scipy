@@ -131,6 +131,7 @@ class _coo_base(_data_matrix, _minmax_mixin):
         # Handle overflow as in https://github.com/scipy/scipy/pull/9132
         if self.ndim == 1:
             flat_indices = self.indices[0]
+            new_indices = np.unravel_index(flat_indices, shape, order=order)
         else:
             nrows, ncols = self.shape
             row, col = self.indices
@@ -138,13 +139,20 @@ class _coo_base(_data_matrix, _minmax_mixin):
                 maxval = (ncols * max(0, nrows - 1) + max(0, ncols - 1))
                 idx_dtype = self._get_index_dtype(maxval=maxval)
                 flat_indices = np.multiply(ncols, row, dtype=idx_dtype) + col
+                if len(shape) == 1:
+                    new_indices = (flat_indices,)
+                else:
+                    new_indices = divmod(flat_indices, shape[1])
             elif order == 'F':
                 maxval = (nrows * max(0, ncols - 1) + max(0, nrows - 1))
                 idx_dtype = self._get_index_dtype(maxval=maxval)
                 flat_indices = np.multiply(nrows, col, dtype=idx_dtype) + row
+                if len(shape) == 1:
+                    new_indices = (flat_indices,)
+                else:
+                    new_indices = divmod(flat_indices, shape[0])[::-1]
             else:
                 raise ValueError("'order' must be 'C' or 'F'")
-        new_indices = np.unravel_index(flat_indices, shape, order=order)
 
         # Handle copy here rather than passing on to the constructor so that no
         # copy will be made of new_row and new_col regardless
