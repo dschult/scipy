@@ -3696,7 +3696,7 @@ class TestCSR(sparse_test_class()):
         assert_array_equal(bsp.indices,[1,0,1])
         assert_array_equal(bsp.indptr,[0,1,2,3])
         assert_equal(bsp.getnnz(),3)
-        assert_equal(bsp.getformat(),'csr')
+        assert_equal(bsp.format,'csr')
         assert_array_equal(bsp.toarray(), b)
 
     def test_constructor2(self):
@@ -3948,7 +3948,7 @@ class TestCSC(sparse_test_class()):
         assert_array_equal(bsp.indptr,[0,1,2,3,4])
         assert_equal(bsp.getnnz(),4)
         assert_equal(bsp.shape,b.shape)
-        assert_equal(bsp.getformat(),'csc')
+        assert_equal(bsp.format,'csc')
 
     def test_constructor2(self):
         b = zeros((6,6),'d')

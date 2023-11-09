@@ -8,7 +8,7 @@ import numpy as np
 
 from ._matrix import spmatrix, _array_doc_to_matrix
 from ._base import _spbase, sparray
-from ._sparsetools import csc_tocsr, expandptr
+from ._sparsetools import csc_tocsr, expandptr, get_csr_submatrix
 from ._sputils import upcast
 
 from ._compressed import _cs_matrix
@@ -116,16 +116,21 @@ class _csc_base(_cs_matrix):
             raise ValueError("Sparse matrices do not support "
                               "an 'axes' parameter because swapping "
                               "dimensions is the only logical permutation.")
-
-        M, N = self.shape
-
-        return self._csr_container((self.data, self.indices,
-                                    self.indptr), (N, M), copy=copy)
+        if self.ndim == 2:
+            M, N = self.shape
+            return self._csr_container((self.data, self.indices,
+                                        self.indptr), (N, M), copy=copy)
+        elif self.ndim == 1:
+            return self.copy() if copy else self
 
     transpose.__doc__ = _spbase.transpose.__doc__
 
     def __iter__(self):
-        yield from self.tocsr()
+        if self.ndim ==1:
+            for r in range(self.shape[0]):
+                yield self[r]
+        else:
+            yield from self.tocsr()
 
     def tocsc(self, copy=False):
         if copy:
@@ -136,7 +141,14 @@ class _csc_base(_cs_matrix):
     tocsc.__doc__ = _spbase.tocsc.__doc__
 
     def tocsr(self, copy=False):
-        M,N = self.shape
+        if self.ndim == 1:
+            # 1d csc has same indices and indptr as 1d csr
+            data, indices, indptr = self.data, self.indices, self.indptr
+            A = self._csr_container((data, indices, indptr), shape=self.shape)
+            A.has_sorted_indices = True
+            return A
+
+        M, N = self.shape
         idx_dtype = self._get_index_dtype((self.indptr, self.indices),
                                     maxval=max(self.nnz, N))
         indptr = np.empty(M + 1, dtype=idx_dtype)
@@ -151,17 +163,17 @@ class _csc_base(_cs_matrix):
                   indices,
                   data)
 
-        A = self._csr_container(
-            (data, indices, indptr),
-            shape=self.shape, copy=False
-        )
+        A = self._csr_container((data, indices, indptr), shape=self.shape)
         A.has_sorted_indices = True
         return A
 
     tocsr.__doc__ = _spbase.tocsr.__doc__
 
     def nonzero(self):
-        # CSC can't use _cs_matrix's .nonzero method because it
+        if self.ndim == 1:
+            return super().nonzero()
+
+        # 2D CSC can't use _cs_matrix's .nonzero method because it
         # returns the indices sorted for self transposed.
 
         # Get row and col indices, from _cs_matrix.tocoo
@@ -189,6 +201,11 @@ class _csc_base(_cs_matrix):
         """Returns a copy of row i of the matrix, as a (1 x n)
         CSR matrix (row vector).
         """
+        if self.ndim == 1:
+            if i not in (0, -1):
+                raise IndexError(f'index ({i}) out of range')
+            return self.reshape((1, self.shape[0]), copy=True)
+
         M, N = self.shape
         i = int(i)
         if i < 0:
@@ -201,13 +218,19 @@ class _csc_base(_cs_matrix):
         """Returns a copy of column i of the matrix, as a (m x 1)
         CSC matrix (column vector).
         """
-        M, N = self.shape
+        N = self.shape[-1]
         i = int(i)
         if i < 0:
             i += N
         if i < 0 or i >= N:
             raise IndexError('index (%d) out of range' % i)
-        return self._get_submatrix(major=i, copy=True)
+        if self.ndim == 2:
+            return self._get_submatrix(major=i, copy=True)
+        # 1d array treat as csr row
+        indptr, indices, data = get_csr_submatrix(
+            1, N, self.indptr, self.indices, self.data, 0, 1, i, i + 1)
+        return self.__class__((data, indices, indptr), shape=(1, 1),
+                              dtype=self.dtype, copy=False)
 
     def _get_intXarray(self, row, col):
         return self._major_index_fancy(col)._get_submatrix(minor=row)

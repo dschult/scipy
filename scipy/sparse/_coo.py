@@ -202,23 +202,25 @@ class _coo_base(_data_matrix, _minmax_mixin):
 
     @property
     def row(self):
-        return self.indices[0]
+        if self.ndim > 1:
+            return self.indices[0]
+        return np.zeros(self.nnz, dtype=self.indices[0].dtype)
 
     @row.setter
     def row(self, new_row):
+        if self.ndim < 2:
+            raise ValueError('cannot set row attribute of a 1-dimensional sparse array')
         new_row = np.asarray(new_row, dtype=self.indices[0].dtype)
         self.indices = (new_row,) + self.indices[1:]
 
     @property
     def col(self):
-        return self.indices[1] if self.ndim > 1 else np.zeros_like(self.row)
+        return self.indices[-1]
 
     @col.setter
     def col(self, new_col):
-        if self.ndim < 2:
-            raise ValueError('cannot set col attribute of a 1-dimensional sparse array')
-        new_col = np.asarray(new_col, dtype=self.indices[1].dtype)
-        self.indices = self.indices[:1] + (new_col,) + self.indices[2:]
+        new_col = np.asarray(new_col, dtype=self.indices[-1].dtype)
+        self.indices = self.indices[:-1] + (new_col,)
 
     def reshape(self, *args, **kwargs):
         is_array = isinstance(self, sparray)
@@ -361,7 +363,7 @@ class _coo_base(_data_matrix, _minmax_mixin):
             raise ValueError("Output array must be C or F contiguous")
         if self.ndim > 2:
             raise ValueError("Cannot densify higher-rank sparse array")
-        M, N, *_ = self.shape + (1, 1)
+        *_, M, N = (1, 1) + self.shape
         coo_todense(M, N, self.nnz, self.row, self.col, self.data,
                     B.ravel('A'), fortran)
         # Note: reshape() doesn't copy here, but does return a new array (view).
@@ -389,8 +391,8 @@ class _coo_base(_data_matrix, _minmax_mixin):
                [0, 0, 0, 1]])
 
         """
-        if self.ndim != 2:
-            raise ValueError("Cannot convert a 1d sparse array to csc format")
+#        if self.ndim != 2:
+#            raise ValueError("Cannot convert a 1d sparse array to csc format")
         if self.nnz == 0:
             return self._csc_container(self.shape, dtype=self.dtype)
         else:
@@ -398,20 +400,21 @@ class _coo_base(_data_matrix, _minmax_mixin):
             idx_dtype = self._get_index_dtype(
                 self.indices, maxval=max(self.nnz, N)
             )
-            col = self.indices[-1].astype(idx_dtype, copy=False)
-            if self.ndim == 1:
-                row = np.zeros(N, dtype = idx_dtype)
-                M = 1
-            else:
-                row = self.indices[-2].astype(idx_dtype, copy=False)
-                M = self.shape[-2]
-
-            indptr = np.empty(N + 1, dtype=idx_dtype)
-            indices = np.empty_like(row, dtype=idx_dtype)
+            indices = np.empty(self.nnz, dtype=idx_dtype)
             data = np.empty_like(self.data, dtype=upcast(self.dtype))
 
-            coo_tocsr(N, M, self.nnz, col, row, self.data,
-                      indptr, indices, data)
+            if self.ndim == 1:
+                # construct using csr order because 1d is csr even for csc
+                col = self.indices[-1].astype(idx_dtype, copy=False)
+                row = np.zeros_like(col)
+                indptr = np.empty(2, dtype=idx_dtype)
+                coo_tocsr(1, N, self.nnz, row, col, self.data,
+                          indptr, indices, data)
+            else:
+                row, col = [idx.astype(idx_dtype, copy=False) for idx in self.indices]
+                indptr = np.empty(N + 1, dtype=idx_dtype)
+                coo_tocsr(N, self.shape[0], self.nnz, col, row, self.data,
+                          indptr, indices, data)
 
             x = self._csc_container((data, indices, indptr), shape=self.shape)
             if not self.has_canonical_format:
@@ -438,18 +441,19 @@ class _coo_base(_data_matrix, _minmax_mixin):
                [0, 0, 0, 1]])
 
         """
-        if self.ndim != 2:
-            raise ValueError("Cannot convert a 1d sparse array to csr format")
-        if self.nnz == 0:
+#        if self.ndim != 2:
+#            raise ValueError("Cannot convert a 1d sparse array to csr format")
+        nnz = self.nnz
+        if nnz == 0:
             return self._csr_container(self.shape, dtype=self.dtype)
         else:
             N = self.shape[-1]
             idx_dtype = self._get_index_dtype(
-                self.indices, maxval=max(self.nnz, N)
+                self.indices, maxval=max(nnz, N)
             )
             col = self.indices[-1].astype(idx_dtype, copy=False)
             if self.ndim == 1:
-                row = np.zeros(N, dtype = idx_dtype)
+                row = np.zeros_like(col)
                 M = 1
             else:
                 row = self.indices[-2].astype(idx_dtype, copy=False)
@@ -459,8 +463,7 @@ class _coo_base(_data_matrix, _minmax_mixin):
             indices = np.empty_like(col, dtype=idx_dtype)
             data = np.empty_like(self.data, dtype=upcast(self.dtype))
 
-            coo_tocsr(M, N, self.nnz, row, col, self.data,
-                      indptr, indices, data)
+            coo_tocsr(M, N, nnz, row, col, self.data, indptr, indices, data)
 
             x = self._csr_container((data, indices, indptr), shape=self.shape)
             if not self.has_canonical_format:
@@ -631,8 +634,8 @@ class _coo_base(_data_matrix, _minmax_mixin):
         dtype = upcast_char(self.dtype.char, other.dtype.char)
         result = np.array(other, dtype=dtype, copy=True)
         fortran = int(result.flags.f_contiguous)
-        M = self.shape[0]
-        N = self.shape[1] if self.ndim > 1 else 1
+        M = self.shape[0] if self.ndim > 1 else 1
+        N = self.shape[-1]
         coo_todense(M, N, self.nnz, self.row, self.col, self.data,
                     result.ravel('A'), fortran)
         return self._container(result, copy=False)

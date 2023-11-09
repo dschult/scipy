@@ -145,13 +145,18 @@ class _csr_base(_cs_matrix):
                               "an 'axes' parameter because swapping "
                               "dimensions is the only logical permutation.")
 
-        M, N = self.shape
-        return self._csc_container((self.data, self.indices,
-                                    self.indptr), shape=(N, M), copy=copy)
+        if self.ndim == 2:
+            M, N = self.shape
+            return self._csc_container((self.data, self.indices,
+                                        self.indptr), shape=(N, M), copy=copy)
+        elif self.ndim == 1:
+            return self.copy() if copy else self
 
     transpose.__doc__ = _spbase.transpose.__doc__
 
     def tolil(self, copy=False):
+        if self.ndim != 2:
+            raise ValueError("Cannot convert a 1d sparse array to csc format")
         lil = self._lil_container(self.shape, dtype=self.dtype)
 
         self.sum_duplicates()
@@ -177,13 +182,21 @@ class _csr_base(_cs_matrix):
     tocsr.__doc__ = _spbase.tocsr.__doc__
 
     def tocsc(self, copy=False):
+        if self.ndim == 1:
+            # 1d csr has same indices and indptr as 1d csc
+            data, indices, indptr = self.data, self.indices, self.indptr
+            A = self._csc_container((data, indices, indptr), shape=self.shape)
+            A.has_sorted_indices = True
+            return A
+
+        M, N = self.shape
         idx_dtype = self._get_index_dtype((self.indptr, self.indices),
-                                    maxval=max(self.nnz, self.shape[0]))
-        indptr = np.empty(self.shape[1] + 1, dtype=idx_dtype)
+                                    maxval=max(self.nnz, M))
+        indptr = np.empty(N + 1, dtype=idx_dtype)
         indices = np.empty(self.nnz, dtype=idx_dtype)
         data = np.empty(self.nnz, dtype=upcast(self.dtype))
 
-        csr_tocsc(self.shape[0], self.shape[1],
+        csr_tocsc(M, N,
                   self.indptr.astype(idx_dtype),
                   self.indices.astype(idx_dtype),
                   self.data,
@@ -198,6 +211,8 @@ class _csr_base(_cs_matrix):
     tocsc.__doc__ = _spbase.tocsc.__doc__
 
     def tobsr(self, blocksize=None, copy=True):
+        if self.ndim != 2:
+            raise ValueError("Cannot convert a 1d sparse array to csc format")
         if blocksize is None:
             from ._spfuncs import estimate_blocksize
             return self.tobsr(blocksize=estimate_blocksize(self))
@@ -241,6 +256,11 @@ class _csr_base(_cs_matrix):
         return x
 
     def __iter__(self):
+        if self.ndim == 1:
+            for r in range(self.shape[0]):
+                yield self[r]
+            return
+
         indptr = np.zeros(2, dtype=self.indptr.dtype)
         shape = (1, self.shape[1])
         i0 = 0
@@ -248,15 +268,18 @@ class _csr_base(_cs_matrix):
             indptr[1] = i1 - i0
             indices = self.indices[i0:i1]
             data = self.data[i0:i1]
-            yield self.__class__(
-                (data, indices, indptr), shape=shape, copy=True
-            )
+            yield self.__class__((data, indices, indptr), shape=shape, copy=True)
             i0 = i1
 
     def _getrow(self, i):
         """Returns a copy of row i of the matrix, as a (1 x n)
         CSR matrix (row vector).
         """
+        if self.ndim == 1:
+            if i not in (0, -1):
+                raise IndexError(f'index ({i}) out of range')
+            return self.reshape((1, self.shape[0]), copy=True)
+
         M, N = self.shape
         i = int(i)
         if i < 0:
@@ -272,7 +295,7 @@ class _csr_base(_cs_matrix):
         """Returns a copy of column i of the matrix, as a (m x 1)
         CSR matrix (column vector).
         """
-        M, N = self.shape
+        M, N = self.shape if self.ndim == 2 else (1, self.shape[-1])
         i = int(i)
         if i < 0:
             i += N

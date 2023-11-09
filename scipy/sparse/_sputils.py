@@ -303,7 +303,7 @@ def check_shape(args, current_shape=None, allow_ndim=False) -> tuple[int, ...]:
         If None (default), the current shape will be inferred from args.
     allow_ndim : bool, optional
         If True, then n-D arrays are accepted.
-        If False (default), then only 1-D and 2-D sparse arrays are accepted
+        If False (default), then only 2-D sparse arrays are accepted
         and an error is raised otherwise.
         
     Returns

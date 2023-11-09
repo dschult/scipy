@@ -545,8 +545,6 @@ class _dok_base(_spbase, IndexMixin):
     todok.__doc__ = _spbase.todok.__doc__
 
     def tocsc(self, copy=False):
-        if self.ndim == 1:
-            raise NotImplementedError
         return self.tocoo(copy=False).tocsc(copy=copy)
 
     tocsc.__doc__ = _spbase.tocsc.__doc__

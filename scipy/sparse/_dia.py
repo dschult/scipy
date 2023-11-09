@@ -159,7 +159,7 @@ class _dia_base(_data_matrix):
             raise ValueError('offset array contains duplicate values')
 
     def __repr__(self):
-        format = _formats[self.getformat()][1]
+        format = _formats[self.format][1]
         return "<%dx%d sparse matrix of type '%s'\n" \
                "\twith %d stored elements (%d diagonals) in %s format>" % \
                (self.shape + (self.dtype.type, self.nnz, self.data.shape[0],
