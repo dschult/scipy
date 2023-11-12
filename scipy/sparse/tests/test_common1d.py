@@ -10,7 +10,7 @@ from numpy.testing import (assert_equal, assert_array_equal,
         assert_array_almost_equal, assert_almost_equal, assert_,
         assert_allclose,suppress_warnings)
 
-from scipy.sparse import (coo_array, csr_array,
+from scipy.sparse import (coo_array, csr_array, csc_array,
                           dok_array, sparray, issparse)
 from scipy.sparse._sputils import (supported_dtypes, isscalarlike,
                                    asmatrix, matrix)
@@ -33,29 +33,27 @@ def toarray(a):
     return a.toarray()
 
 
-class _TestCommon1D:
+class _Common1D:
     """test common functionality shared by 1D sparse formats"""
-    @classmethod
-    def init_class(cls):
-        # Canonical data.
-        cls.dat1d = array([3, 0, 1, 0], 'd')
-        cls.datsp = cls.spcreator(cls.dat1d)
 
-        # Some sparse and dense matrices with data for every supported dtype.
-        # This set union is a workaround for numpy#6295, which means that
-        # two np.int64 dtypes don't hash to the same value.
-        cls.checked_dtypes = set(supported_dtypes).union(cls.math_dtypes)
-        cls.dat_dtypes = {}
-        cls.datsp_dtypes = {}
-        for dtype in cls.checked_dtypes:
-            cls.dat_dtypes[dtype] = cls.dat1d.astype(dtype)
-            cls.datsp_dtypes[dtype] = cls.spcreator(cls.dat1d.astype(dtype))
+    # Canonical data.
+    dat1d = array([3, 0, 1, 0], 'd')
 
+    # Some sparse and dense matrices with data for every supported dtype.
+    # This set union is a workaround for numpy#6295, which means that
+    # two np.int64 dtypes don't hash to the same value.
+    math_dtypes = [np.int_, np.float_, np.complex_]
+    checked_dtypes = set(supported_dtypes).union(math_dtypes)
+    dat_dtypes = {}
+    for dtype in checked_dtypes:
+        dat_dtypes[dtype] = dat1d.astype(dtype)
+
+    def test_class_vars(self):
         # Check that the original data is equivalent to the
         # corresponding dat_dtypes & datsp_dtypes.
-        assert_equal(cls.dat1d, cls.dat_dtypes[np.float64])
-        assert_equal(cls.datsp.toarray(),
-                     cls.datsp_dtypes[np.float64].toarray())
+        assert_equal(self.dat1d, self.dat_dtypes[np.float64])
+        assert_equal(self.datsp.toarray(),
+                     self.datsp_dtypes[np.float64].toarray())
 
     def test_empty(self):
         # create empty matrices
@@ -213,14 +211,14 @@ class _TestCommon1D:
     def test_sum_dtype(self):
         dat = array([0, 1, 2])
         datsp = self.spcreator(dat)
-        print("datsp format:", datsp.format)
+        #print("datsp format:", datsp.format)
 
         def check_dtype(dtype):
-            print("datsp dtype:", datsp.dtype, datsp)
-            print("in check_dtype: ", dtype, "datsp dtype:", datsp.dtype, "dat dtype:", dat.dtype)
+            #print("datsp dtype:", datsp.dtype, datsp)
+            #print("in check_dtype: ", dtype, "datsp dtype:", datsp.dtype, "dat dtype:", dat.dtype)
             dat_sum = dat.sum(dtype=dtype)
             datsp_sum = datsp.sum(dtype=dtype)
-            print("dtype: ", dtype, "dat_sum dtype:", dat_sum.dtype, "datsp_sum dtype:", datsp_sum.dtype)
+            #print("dtype: ", dtype, "dat_sum dtype:", dat_sum.dtype, "datsp_sum dtype:", datsp_sum.dtype)
 
             assert_array_almost_equal(dat_sum, datsp_sum)
             assert_equal(dat_sum.dtype, datsp_sum.dtype)
@@ -231,14 +229,14 @@ class _TestCommon1D:
     def test_mean_dtype(self):
         dat = array([0, 1, 2])
         datsp = self.spcreator(dat)
-        print("datsp format:", datsp.format)
+        #print("datsp format:", datsp.format)
 
         def check_dtype(dtype):
-            print("datsp dtype:", datsp.dtype, datsp)
-            print("in check_dtype: ", dtype, "datsp dtype:", datsp.dtype, "dat dtype:", dat.dtype)
+            #print("datsp dtype:", datsp.dtype, datsp)
+            #print("in check_dtype: ", dtype, "datsp dtype:", datsp.dtype, "dat dtype:", dat.dtype)
             dat_mean = dat.mean(dtype=dtype)
             datsp_mean = datsp.mean(dtype=dtype)
-            print("dtype: ", dtype, "dat_mean dtype:", dat_mean.dtype, "datsp_mean dtype:", datsp_mean.dtype)
+            #print("dtype: ", dtype, "dat_mean dtype:", dat_mean.dtype, "datsp_mean dtype:", datsp_mean.dtype)
 
             assert_array_almost_equal(dat_mean, datsp_mean)
             assert_equal(dat_mean.dtype, datsp_mean.dtype)
@@ -475,7 +473,7 @@ class _TestCommon1D:
         Asp = self.spcreator(A)
         Bsp = self.spcreator(B)
         assert_almost_equal(Asp.multiply(Bsp).toarray(), A*B)  # sparse/sparse
-        print("multiply Asp by B; Asp, B, Asp*B: ", Asp.toarray(), B, Asp*B)
+        #print("multiply Asp by B; Asp, B, Asp*B: ", Asp.toarray(), B, Asp*B)
         assert_almost_equal(Asp.multiply(B).toarray(), A*B)  # sparse/dense
 
         # complex/complex
@@ -767,33 +765,34 @@ class _TestCommon1D:
         assert_array_equal(S.toarray(), [1, 0, 3, 0, 0])
 
 
-class TestCOO1D(_TestCommon1D):
+class TestCOO1D(_Common1D):
     spcreator = coo_array
-    math_dtypes = [np.int_, np.float_, np.complex_]
+    datsp = spcreator(_Common1D.dat1d)
+    datsp_dtypes = {}
+    for dtype in _Common1D.checked_dtypes:
+        datsp_dtypes[dtype] = spcreator(_Common1D.dat1d.astype(dtype))
 
 
-TestCOO1D.init_class()
+class TestCSC1D(_Common1D):
+    spcreator = csc_array
+    datsp = spcreator(_Common1D.dat1d)
+    datsp_dtypes = {}
+    for dtype in _Common1D.checked_dtypes:
+        datsp_dtypes[dtype] = spcreator(_Common1D.dat1d.astype(dtype))
 
 
-#class TestCSC1D(_TestCommon1D):
-#    spcreator = csc_array
-#    math_dtypes = [np.int_, np.float_, np.complex_]
-#
-#
-#TestCSC1D.init_class()
-
-
-class TestCSR1D(_TestCommon1D):
+class TestCSR1D(_Common1D):
     spcreator = csr_array
-    math_dtypes = [np.int_, np.float_, np.complex_]
+    datsp = spcreator(_Common1D.dat1d)
+    datsp_dtypes = {}
+    for dtype in _Common1D.checked_dtypes:
+        datsp_dtypes[dtype] = spcreator(_Common1D.dat1d.astype(dtype))
 
 
-TestCSR1D.init_class()
-
-
-class TestDOK1D(_TestCommon1D):
+class TestDOK1D(_Common1D):
     spcreator = dok_array
-    math_dtypes = [np.int_, np.float_, np.complex_]
+    datsp = spcreator(_Common1D.dat1d)
+    datsp_dtypes = {}
+    for dtype in _Common1D.checked_dtypes:
+        datsp_dtypes[dtype] = spcreator(_Common1D.dat1d.astype(dtype))
 
-
-TestDOK1D.init_class()

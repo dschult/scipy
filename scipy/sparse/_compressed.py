@@ -364,6 +364,8 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
         return self._binopt(other, '_plus_')
 
     def _sub_sparse(self, other):
+        #print("inside sub_sparse", self.data)
+        #print("inside sub_sparse, other", other.data, other.indices, other.indptr)
         return self._binopt(other, '_minus_')
 
     def multiply(self, other):
@@ -537,10 +539,16 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
                           dtype=upcast_char(self.dtype.char, other.dtype.char))
 
         # csr_matvecs or csc_matvecs
-        fn = getattr(_sparsetools, self.format + '_matvecs')
+        fmt = self.format if self.ndim == 2 else 'csr'
+        fn = getattr(_sparsetools, fmt + '_matvecs')
         fn(M, N, n_vecs, self.indptr, self.indices, self.data,
            other.ravel(), result.ravel())
 
+#        print("n_vecs", n_vecs, "; shape indptr: ", result.shape)
+#        print(fmt + '_matvecs', fn)
+#        print("in _mul_multivector: self shape, data indices indptr: ", self.shape, self.data, self.indices, self.indptr, self.format)
+#        print("in _mul_multivector: other shape, ndarray: ", other.shape, other)
+#        print("in _mul_multivector: result shape, ndarray: ", (M,N), result)
         if self.ndim == 1:
             return result.reshape((n_vecs,))
         return result
@@ -548,37 +556,6 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
     def _mul_sparse_matrix(self, other):
         M, K1 = self._shape if self.ndim == 2 else (1, self._shape[-1])
         K2, N = other.shape if other.ndim == 2 else (other.shape[0], 1)
-
-        major_axis = self._swap((M, N))[0]
-        other = self.__class__(other)  # convert to this format
-
-        idx_dtype = self._get_index_dtype((self.indptr, self.indices,
-                                     other.indptr, other.indices))
-
-        fn = getattr(_sparsetools, self.format + '_matmat_maxnnz')
-        nnz = fn(M, N,
-                 np.asarray(self.indptr, dtype=idx_dtype),
-                 np.asarray(self.indices, dtype=idx_dtype),
-                 np.asarray(other.indptr, dtype=idx_dtype),
-                 np.asarray(other.indices, dtype=idx_dtype))
-
-        idx_dtype = self._get_index_dtype((self.indptr, self.indices,
-                                     other.indptr, other.indices),
-                                    maxval=nnz)
-
-        indptr = np.empty(major_axis + 1, dtype=idx_dtype)
-        indices = np.empty(nnz, dtype=idx_dtype)
-        data = np.empty(nnz, dtype=upcast(self.dtype, other.dtype))
-
-        fn = getattr(_sparsetools, self.format + '_matmat')
-        fn(M, N, np.asarray(self.indptr, dtype=idx_dtype),
-           np.asarray(self.indices, dtype=idx_dtype),
-           self.data,
-           np.asarray(other.indptr, dtype=idx_dtype),
-           np.asarray(other.indices, dtype=idx_dtype),
-           other.data,
-           indptr, indices, data)
-
         if self.ndim == 2:
             if other.ndim == 2:
                 new_shape = (M, N)
@@ -588,6 +565,47 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
             new_shape = (N,)
         else:
             new_shape = (1,)
+
+        not_csc_1d = self.ndim != 1 or self.format != 'csc'
+        fmt = self.format if not_csc_1d else 'csr'
+        major_axis = self._swap((M, N))[0] if not_csc_1d else M
+        other = other.asformat(fmt)  #__class__(other)  # convert to this format
+
+        idx_dtype = self._get_index_dtype((self.indptr, self.indices,
+                                     other.indptr, other.indices))
+
+        fn = getattr(_sparsetools, fmt + '_matmat_maxnnz')
+        nnz = fn(M, N,
+                 np.asarray(self.indptr, dtype=idx_dtype),
+                 np.asarray(self.indices, dtype=idx_dtype),
+                 np.asarray(other.indptr, dtype=idx_dtype),
+                 np.asarray(other.indices, dtype=idx_dtype))
+        if nnz == 0:
+            return self.__class__(new_shape, dtype=upcast(self.dtype, other.dtype))
+
+        idx_dtype = self._get_index_dtype((self.indptr, self.indices,
+                                     other.indptr, other.indices),
+                                    maxval=nnz)
+
+        indptr = np.empty(major_axis + 1, dtype=idx_dtype)
+        indices = np.empty(nnz, dtype=idx_dtype)
+        data = np.empty(nnz, dtype=upcast(self.dtype, other.dtype))
+        #print(indptr, indices, data)
+
+        fn = getattr(_sparsetools, fmt + '_matmat')
+        fn(M, N, np.asarray(self.indptr, dtype=idx_dtype),
+           np.asarray(self.indices, dtype=idx_dtype),
+           self.data,
+           np.asarray(other.indptr, dtype=idx_dtype),
+           np.asarray(other.indices, dtype=idx_dtype),
+           other.data,
+           indptr, indices, data)
+#        print("major_axis", major_axis, "; shape indptr: ", indptr.shape, " (M,N): ", (M,N))
+#        print(fmt + '_matmat', fn)
+#        print("in _mul_sparse_matrix: self shape, data indices indptr: ", self.shape, self.data, self.indices, self.indptr, self.format)
+#        print("in _mul_sparse_matrix: other shape, data indices indptr: ", other.shape, other.data, other.indices, other.indptr, other.format)
+#        print("in _mul_sparse_matrix: result shape, data indices indptr: ", (M,N), data, indices, indptr, fmt)
+
         return self.__class__((data, indices, indptr), shape=new_shape)
 
     def diagonal(self, k=0):
@@ -1380,7 +1398,8 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
         other = self.__class__(other)
 
         # e.g. csr_plus_csr, csr_minus_csr, etc.
-        fn = getattr(_sparsetools, self.format + op + self.format)
+        fmt = self.format if self.ndim > 1 or self.format != 'csc' else 'csr'
+        fn = getattr(_sparsetools, fmt + op + fmt)
 
         maxnnz = self.nnz + other.nnz
         idx_dtype = self._get_index_dtype((self.indptr, self.indices,
@@ -1396,6 +1415,8 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
             data = np.empty(maxnnz, dtype=upcast(self.dtype, other.dtype))
 
         shape = self.shape if self.ndim == 2 else (1, self.shape[0])
+        #print("Inside binopt: self: indptr, indices, data", self.indptr, self.indices, self.data, self.format)
+        #print("Inside binopt: other: indptr, indices, data", other.indptr, other.indices, other.data, other.format)
         fn(shape[0], shape[1],
            np.asarray(self.indptr, dtype=idx_dtype),
            np.asarray(self.indices, dtype=idx_dtype),
@@ -1404,9 +1425,11 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
            np.asarray(other.indices, dtype=idx_dtype),
            other.data,
            indptr, indices, data)
+        #print("Inside binopt: result: indptr, indices, data", indptr, indices, data)
 
         A = self.__class__((data, indices, indptr), shape=self.shape)
         A.prune()
+        #print("Inside binopt: A: indptr, indices, data", A.indptr, A.indices, A.data, A.format)
 
         return A
 
