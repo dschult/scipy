@@ -161,6 +161,18 @@ class _spbase:
             else:
                 return self
 
+        if is_array:
+            if len(shape) == self.ndim + 1 and 1 in shape:
+                # remove one dimension
+                new = self.tocsr(copy=copy)
+                new._shape = shape
+                return new
+            if len(shape) == self.ndim -1 and 1 in self.shape:
+                # add one dimension
+                new = (self if self.shape[0] == 1 else self.T).tocsr(copy=copy)
+                new._shape = shape
+                return new
+
         return self.tocoo(copy=copy).reshape(shape, order=order, copy=False)
 
     def resize(self, shape):
@@ -872,29 +884,33 @@ class _spbase:
         # Subclasses should override this method for efficiency.
         # Post-multiply by a (n x 1) column vector 'a' containing all zeros
         # except for a_j = 1
-        n = self.shape[1]
+        N = self.shape[-1]
         if j < 0:
-            j += n
-        if j < 0 or j >= n:
+            j += N
+        if j < 0 or j >= N:
             raise IndexError("index out of bounds")
         col_selector = self._csc_container(([1], [[j], [0]]),
-                                           shape=(n, 1), dtype=self.dtype)
+                                           shape=(N, 1), dtype=self.dtype)
+        if self.ndim == 1:
+            return (self @ col_selector).reshape(1, 1)
         return self @ col_selector
 
     def _getrow(self, i):
         """Returns a copy of row i of the array, as a (1 x n) sparse
         array (row vector).
         """
+        if self.ndim == 1:
+            return self.reshape(1, self.shape[0])
         # Subclasses should override this method for efficiency.
         # Pre-multiply by a (1 x m) row vector 'a' containing all zeros
         # except for a_i = 1
-        m = self.shape[0]
+        M = self.shape[0]
         if i < 0:
-            i += m
-        if i < 0 or i >= m:
+            i += M
+        if i < 0 or i >= M:
             raise IndexError("index out of bounds")
         row_selector = self._csr_container(([1], [[0], [i]]),
-                                           shape=(1, m), dtype=self.dtype)
+                                           shape=(1, M), dtype=self.dtype)
         return row_selector @ self
 
     # The following dunder methods cannot be implemented.
@@ -1108,12 +1124,12 @@ class _spbase:
         # We use multiplication by a matrix of ones to achieve sum.
         # For some sparse array formats more efficient methods are
         # possible -- these should override this function.
-        m, n = self.shape
+        M, N = self.shape
 
         if axis is None:
             # sum over rows and columns
             return (
-                self @ self._ascontainer(np.ones((n, 1), dtype=res_dtype))
+                self @ self._ascontainer(np.ones((N, 1), dtype=res_dtype))
             ).sum(dtype=dtype, out=out)
 
         if axis < 0:
@@ -1123,12 +1139,12 @@ class _spbase:
         if axis == 0:
             # sum over columns
             ret = self._ascontainer(
-                np.ones((1, m), dtype=res_dtype)
+                np.ones((1, M), dtype=res_dtype)
             ) @ self
         else:
             # sum over rows
             ret = self @ self._ascontainer(
-                np.ones((n, 1), dtype=res_dtype)
+                np.ones((N, 1), dtype=res_dtype)
             )
 
         if out is not None and out.shape != ret.shape:

@@ -122,6 +122,24 @@ class _Common1D:
         A = self.spcreator(D)
         assert_equal(A.imag.toarray(), D.imag)
 
+    def test_reshape_1d_tofrom_row_or_column(self):
+        # add a dimension
+        x = self.spcreator([1, 0, 7, 0, 0, 0, 0, -3, 0, 0, 0, 5])
+        y = x.reshape(1, 12)
+        desired = [[1, 0, 7, 0, 0, 0, 0, -3, 0, 0, 0, 5]]
+        assert_array_equal(y.toarray(), desired)
+
+        # remove a size-1 dimension
+        x = self.spcreator(desired)
+        y = x.reshape(12)
+        assert_array_equal(y.toarray(), desired[0])
+        y2 = x.reshape((12,))
+        assert_equal(y.shape, y2.shape)
+
+        # make a column 1d
+        y = x.T.reshape(12)
+        assert_array_equal(y.toarray(), desired[0])
+
     def test_reshape(self):
         x = self.spcreator([1, 0, 7, 0, 0, 0, 0, -3, 0, 0, 0, 5])
         y = x.reshape((4, 3))
@@ -133,6 +151,14 @@ class _Common1D:
 
         y = x.reshape(12)
         assert_array_equal(y.toarray(), x.toarray())
+
+    def test_getrowcol(self):
+        with suppress_warnings() as sup:
+            sup.filter(DeprecationWarning)
+            assert_array_equal(self.datsp.getrow(0).toarray(), self.dat1d[None, :])
+            assert_array_equal(self.datsp.getrow(-1).toarray(), self.dat1d[None, :])
+            assert_array_equal(self.datsp.getcol(2).toarray(), self.dat1d[None, [2]])
+            assert_array_equal(self.datsp.getcol(-2).toarray(), self.dat1d[None, [-2]])
 
     def test_sum(self):
         np.random.seed(1234)
@@ -211,14 +237,10 @@ class _Common1D:
     def test_sum_dtype(self):
         dat = array([0, 1, 2])
         datsp = self.spcreator(dat)
-        #print("datsp format:", datsp.format)
 
         def check_dtype(dtype):
-            #print("datsp dtype:", datsp.dtype, datsp)
-            #print("in check_dtype: ", dtype, "datsp dtype:", datsp.dtype, "dat dtype:", dat.dtype)
             dat_sum = dat.sum(dtype=dtype)
             datsp_sum = datsp.sum(dtype=dtype)
-            #print("dtype: ", dtype, "dat_sum dtype:", dat_sum.dtype, "datsp_sum dtype:", datsp_sum.dtype)
 
             assert_array_almost_equal(dat_sum, datsp_sum)
             assert_equal(dat_sum.dtype, datsp_sum.dtype)
@@ -229,14 +251,10 @@ class _Common1D:
     def test_mean_dtype(self):
         dat = array([0, 1, 2])
         datsp = self.spcreator(dat)
-        #print("datsp format:", datsp.format)
 
         def check_dtype(dtype):
-            #print("datsp dtype:", datsp.dtype, datsp)
-            #print("in check_dtype: ", dtype, "datsp dtype:", datsp.dtype, "dat dtype:", dat.dtype)
             dat_mean = dat.mean(dtype=dtype)
             datsp_mean = datsp.mean(dtype=dtype)
-            #print("dtype: ", dtype, "dat_mean dtype:", dat_mean.dtype, "datsp_mean dtype:", datsp_mean.dtype)
 
             assert_array_almost_equal(dat_mean, datsp_mean)
             assert_equal(dat_mean.dtype, datsp_mean.dtype)
@@ -473,7 +491,6 @@ class _Common1D:
         Asp = self.spcreator(A)
         Bsp = self.spcreator(B)
         assert_almost_equal(Asp.multiply(Bsp).toarray(), A*B)  # sparse/sparse
-        #print("multiply Asp by B; Asp, B, Asp*B: ", Asp.toarray(), B, Asp*B)
         assert_almost_equal(Asp.multiply(B).toarray(), A*B)  # sparse/dense
 
         # complex/complex

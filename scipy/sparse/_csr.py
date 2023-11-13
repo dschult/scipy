@@ -156,7 +156,7 @@ class _csr_base(_cs_matrix):
 
     def tolil(self, copy=False):
         if self.ndim != 2:
-            raise ValueError("Cannot convert a 1d sparse array to csc format")
+            raise ValueError("Cannot convert a 1d sparse array to lil format")
         lil = self._lil_container(self.shape, dtype=self.dtype)
 
         self.sum_duplicates()
@@ -182,14 +182,10 @@ class _csr_base(_cs_matrix):
     tocsr.__doc__ = _spbase.tocsr.__doc__
 
     def tocsc(self, copy=False):
-        if self.ndim == 1:
-            # 1d csr has same indices and indptr as 1d csc
-            data, indices, indptr = self.data, self.indices, self.indptr
-            A = self._csc_container((data, indices, indptr), shape=self.shape)
-            A.has_sorted_indices = True
-            return A
+        s = self._shape
+        M = s[-2] if len(s) > 1 else 1
+        N = s[-1]
 
-        M, N = self.shape
         idx_dtype = self._get_index_dtype((self.indptr, self.indices),
                                     maxval=max(self.nnz, M))
         indptr = np.empty(N + 1, dtype=idx_dtype)
@@ -212,7 +208,7 @@ class _csr_base(_cs_matrix):
 
     def tobsr(self, blocksize=None, copy=True):
         if self.ndim != 2:
-            raise ValueError("Cannot convert a 1d sparse array to csc format")
+            raise ValueError("Cannot convert a 1d sparse array to bsr format")
         if blocksize is None:
             from ._spfuncs import estimate_blocksize
             return self.tobsr(blocksize=estimate_blocksize(self))
@@ -257,14 +253,23 @@ class _csr_base(_cs_matrix):
 
     def __iter__(self):
         if self.ndim == 1:
-            for r in range(self.shape[0]):
-                yield self[r]
+            zero = self.dtype.type(0)
+            u = 0
+            for v, d in zip(self.indices, self.data):
+                for _ in range(v - u):
+                    yield zero
+                yield d
+                u = v + 1
+            for _ in range(self.shape[0] - u):
+                yield zero
             return
 
         indptr = np.zeros(2, dtype=self.indptr.dtype)
-        shape = (1, self.shape[1])
-        i0 = 0
-        for i1 in self.indptr[1:]:
+        # return 1d (sparray) or 2drow (spmatrix)
+        shape = self.shape[1:] if isinstance(self, sparray) else (1, self.shape[1])
+        idxiter = iter(self.indptr)
+        i0 = next(idxiter)
+        for i1 in idxiter:
             indptr[1] = i1 - i0
             indices = self.indices[i0:i1]
             data = self.data[i0:i1]

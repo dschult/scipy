@@ -8,7 +8,7 @@ import numpy as np
 
 from ._matrix import spmatrix, _array_doc_to_matrix
 from ._base import _spbase, sparray
-from ._sparsetools import csc_tocsr, expandptr, get_csr_submatrix
+from ._sparsetools import csc_tocsr, expandptr
 from ._sputils import upcast
 
 from ._compressed import _cs_matrix
@@ -121,14 +121,22 @@ class _csc_base(_cs_matrix):
             return self._csr_container((self.data, self.indices,
                                         self.indptr), (N, M), copy=copy)
         elif self.ndim == 1:
-            return self.copy() if copy else self
+            return self.tocsr(copy=copy)
 
     transpose.__doc__ = _spbase.transpose.__doc__
 
     def __iter__(self):
-        if self.ndim ==1:
-            for r in range(self.shape[0]):
-                yield self[r]
+        if self.ndim == 1:
+            zero = self.dtype.type(0)
+            data_iter = iter(self.data)
+            idxiter = iter(self.indptr)
+            u = next(idxiter)
+            for v in idxiter:
+                if u != v:
+                    yield next(data_iter)
+                else:
+                    yield zero
+                u = v
         else:
             yield from self.tocsr()
 
@@ -141,16 +149,12 @@ class _csc_base(_cs_matrix):
     tocsc.__doc__ = _spbase.tocsc.__doc__
 
     def tocsr(self, copy=False):
-        if self.ndim == 1:
-            # 1d csc has same indices and indptr as 1d csr
-            data, indices, indptr = self.data, self.indices, self.indptr
-            A = self._csr_container((data, indices, indptr), shape=self.shape)
-            A.has_sorted_indices = True
-            return A
+        s = self._shape
+        M = s[-2] if len(s) > 1 else 1
+        N = s[-1]
 
-        M, N = self.shape
         idx_dtype = self._get_index_dtype((self.indptr, self.indices),
-                                    maxval=max(self.nnz, N))
+                                    maxval=max(self.nnz, max(self.shape)))
         indptr = np.empty(M + 1, dtype=idx_dtype)
         indices = np.empty(self.nnz, dtype=idx_dtype)
         data = np.empty(self.nnz, dtype=upcast(self.dtype))
@@ -204,7 +208,7 @@ class _csc_base(_cs_matrix):
         if self.ndim == 1:
             if i not in (0, -1):
                 raise IndexError(f'index ({i}) out of range')
-            return self.reshape((1, self.shape[0]), copy=True)
+            return self.reshape(1, self.shape[0])
 
         M, N = self.shape
         i = int(i)
@@ -224,13 +228,7 @@ class _csc_base(_cs_matrix):
             i += N
         if i < 0 or i >= N:
             raise IndexError('index (%d) out of range' % i)
-        if self.ndim == 2:
-            return self._get_submatrix(major=i, copy=True)
-        # 1d array treat as csr row
-        indptr, indices, data = get_csr_submatrix(
-            1, N, self.indptr, self.indices, self.data, 0, 1, i, i + 1)
-        return self.__class__((data, indices, indptr), shape=(1, 1),
-                              dtype=self.dtype, copy=False)
+        return self._get_submatrix(major=i, copy=True)
 
     def _get_intXarray(self, row, col):
         return self._major_index_fancy(col)._get_submatrix(minor=row)

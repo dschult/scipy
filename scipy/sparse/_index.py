@@ -44,9 +44,7 @@ class IndexMixin:
     def __getitem__(self, key):
         # handle 1d indexing
         if self.ndim == 1:
-            print("key type:", type(key), key)
             idx = self._validate_indices(key)
-            print("__getitem__ idx type:", type(idx), "idx : ",idx)
             if isinstance(idx, INT_TYPES):
                 return self._get_int(idx)
             elif isinstance(idx, slice):
@@ -168,7 +166,6 @@ class IndexMixin:
 
     def _validate_indices(self, key):
         # single boolean matrix
-        print("validating key:", key)
         if ((issparse(key) or isinstance(key, np.ndarray)) and
                 key.ndim == self.ndim and key.dtype.kind == 'b'):
             idx = key.nonzero()
@@ -196,7 +193,6 @@ class IndexMixin:
         # form a tuple
         indices = _unpack_index(key, self.ndim)
 
-        print("shape", self.shape, "indices: ",indices, "key ", key)
         if len(self.shape) != len(indices):
             raise IndexError("invalid number of indices")
         new_indices = []

@@ -400,21 +400,19 @@ class _coo_base(_data_matrix, _minmax_mixin):
             idx_dtype = self._get_index_dtype(
                 self.indices, maxval=max(self.nnz, N)
             )
+            indptr = np.empty(N + 1, dtype=idx_dtype)
             indices = np.empty(self.nnz, dtype=idx_dtype)
             data = np.empty_like(self.data, dtype=upcast(self.dtype))
 
+            col = self.indices[-1].astype(idx_dtype, copy=False)
             if self.ndim == 1:
-                # construct using csr order because 1d is csr even for csc
-                col = self.indices[-1].astype(idx_dtype, copy=False)
                 row = np.zeros_like(col)
-                indptr = np.empty(2, dtype=idx_dtype)
-                coo_tocsr(1, N, self.nnz, row, col, self.data,
-                          indptr, indices, data)
+                M = 1
             else:
-                row, col = [idx.astype(idx_dtype, copy=False) for idx in self.indices]
-                indptr = np.empty(N + 1, dtype=idx_dtype)
-                coo_tocsr(N, self.shape[0], self.nnz, col, row, self.data,
-                          indptr, indices, data)
+                row = self.indices[-2].astype(idx_dtype, copy=False)
+                M = self.shape[-2]
+            coo_tocsr(N, M, self.nnz, col, row, self.data,
+                      indptr, indices, data)
 
             x = self._csc_container((data, indices, indptr), shape=self.shape)
             if not self.has_canonical_format:
