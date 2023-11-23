@@ -235,23 +235,6 @@ class _minmax_mixin:
 
         zero = self.dtype.type(0)
 
-        if self.ndim == 1:
-            if self.format == "coo":
-                indices = self.indices[0]
-            elif self.format in ("csr", "csc"):
-                indices = self.indices
-            else:
-                mat = self.tocsr()
-                indices = mat.indices
-            extreme_index = argmin_or_argmax(self.data)
-            extreme_value = self.data[extreme_index]
-            if compare(extreme_value, zero) or self.nnz == self.shape[-1]:
-                return indices[extreme_index]
-            zero_ind = _find_missing_index(indices, self.shape[0])
-            if extreme_value == zero:
-                return min(extreme_index, zero_ind)
-            return zero_ind
-
         if self.shape[axis] == 0:
             raise ValueError("Can't apply the operation along a zero-sized "
                              "dimension.")
@@ -288,8 +271,11 @@ class _minmax_mixin:
             raise ValueError("Sparse types do not support an 'out' parameter.")
 
         validateaxis(axis)
-        if self.ndim == 1 and axis not in (None, 0, -1):
-            raise ValueError("axis out of range")
+
+        if self.ndim == 1:
+            if axis not in (None, 0, -1):
+                raise ValueError("axis out of range")
+            axis = None  # avoid calling special axis case. no impact on 1d
 
         if axis is not None:
             return self._arg_min_or_max_axis(axis, argmin_or_argmax, compare)
@@ -300,7 +286,7 @@ class _minmax_mixin:
         if self.nnz == 0:
             return 0
 
-        num_col = self.shape[-1] if self.ndim > 1 else 1
+        num_col = self.shape[-1] if (self.ndim > 1 or self.format == 'csr') else 1
 
         zero = self.dtype.type(0)
         mat = self.tocoo()

@@ -228,7 +228,16 @@ class _csc_base(_cs_matrix):
             i += N
         if i < 0 or i >= N:
             raise IndexError('index (%d) out of range' % i)
-        return self._get_submatrix(major=i, copy=True)
+        ret = self._get_submatrix(major=i, copy=True)
+        return ret.reshape((ret.shape[0], 1))
+
+    def _get_int(self, idx):
+        if 0 <= idx <= self.shape[0]:
+            spot = np.flatnonzero(np.flatnonzero(np.diff(self.indptr)) == idx)
+            if spot.size:
+                return self.data[spot[0]]
+            return self.data.dtype.type(0)
+        raise IndexError(f'index ({idx}) out of range')
 
     def _get_intXarray(self, row, col):
         return self._major_index_fancy(col)._get_submatrix(minor=row)

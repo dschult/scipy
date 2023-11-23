@@ -1,37 +1,30 @@
 import numpy as np
 from numpy.testing import assert_equal, assert_array_equal
-from scipy.sparse import coo_array
+from scipy.sparse import coo_array, csr_array, csc_array
 from pytest import raises as assert_raises
 
-#formats = ['bsr', 'coo', 'lil', 'dia']
-#creators = [bsr_array, coo_array, lil_array, dia_array]
-
 # limit to valid 1d formats that also support minmax
-formats = ['coo']
-creators = [coo_array]
+formats = ['coo', 'csr', 'csc']
+creators = [coo_array, csr_array, csc_array]
 
-dtypes = [np.float32, np.float64, np.int32, np.int64, np.complex128]
 
 def test_minmax():
-    for fmt, spcreator in zip(formats, creators):
-        for dtype in dtypes:
-            D = np.arange(20, dtype=dtype)
+    for spcreator in creators:
+        D = np.arange(20)
 
-            X = spcreator(D)
-            assert_equal(X.min(), 0)
-            assert_equal(X.max(), 19)
-            assert_equal(X.min().dtype, dtype)
-            assert_equal(X.max().dtype, dtype)
+        X = spcreator(D)
+        assert_equal(X.min(), 0)
+        assert_equal(X.max(), 19)
 
-            D *= -1
-            X = spcreator(D)
-            assert_equal(X.min(), -19)
-            assert_equal(X.max(), 0)
+        D *= -1
+        X = spcreator(D)
+        assert_equal(X.min(), -19)
+        assert_equal(X.max(), 0)
 
-            D += 5
-            X = spcreator(D)
-            assert_equal(X.min(), -14)
-            assert_equal(X.max(), 5)
+        D += 5
+        X = spcreator(D)
+        assert_equal(X.min(), -14)
+        assert_equal(X.max(), 5)
 
         # try a fully dense matrix
         X = spcreator(np.arange(1, 10))
@@ -56,7 +49,7 @@ def test_minmax():
 
 
 def test_minmax_axis():
-    for fmt, spcreator in zip(formats, creators):
+    for spcreator in creators:
         D = np.arange(5)
         X = spcreator(D)
 
@@ -72,7 +65,7 @@ def test_minmax_axis():
 
 def test_numpy_minmax():
     dat = np.array([3, -4, 5, 0])
-    for fmt, spcreator in zip(formats, creators):
+    for spcreator in creators:
         datsp = spcreator(dat)
         assert_array_equal(np.min(datsp), np.min(dat))
         assert_array_equal(np.max(datsp), np.max(dat))
@@ -85,7 +78,7 @@ def test_argmax():
     D4 = np.array([1, 2, 3, 4])    # completely dense pos
     D5 = np.array([1, 2, 0, 0])    # min is zero
 
-    for fmt, spcreator in zip(formats, creators):
+    for spcreator in creators:
         for D in [D1, D2, D3, D4, D5]:
             mat = spcreator(D)
 

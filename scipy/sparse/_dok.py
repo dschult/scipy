@@ -110,7 +110,7 @@ class _dok_base(_spbase, IndexMixin):
                 self.dtype = arg1.dtype
             else:
                 d = self._coo_container(arg1, dtype=dtype).todok()
-                sd.update(d._dict)
+                sd.update(d._dict.items())
                 self.dtype = d.dtype
             self._shape = check_shape(arg1.shape, allow_ndim=allow_ndim)
 
@@ -183,15 +183,28 @@ class _dok_base(_spbase, IndexMixin):
 
     def _get_slice(self, idx):
         i_range = range(*idx.indices(self.shape[0]))
-        return self._get_array(i_range)
+        return self._get_array(list(i_range))
 
     def _get_array(self, idx):
-        idx = np.asarray(idx).squeeze()
+        idx = np.asarray(idx)
+        if len(idx.shape) == 0:
+            print("In code for () idx.shape in get_array (DOK)")
+            assert False
+            val = self._dict.get(int(idx), self.dtype.type(0))
+            return self.__class__([val], shape=(1,), dtype=self.dtype)
         new_dok = self._dok_container(idx.shape, dtype=self.dtype)
-        for i, x in enumerate(idx):
-            v = self._dict.get(x, 0)
-            if v:
-                new_dok._dict[i] = v
+        dok_vals = [self._dict.get(i, 0) for i in idx.ravel()]
+        if dok_vals:
+            if len(idx.shape) == 1:
+                for i, v in enumerate(dok_vals):
+                    if v:
+                        new_dok._dict[i] = v
+            else:
+                new_idx = np.unravel_index(np.arange(len(dok_vals)), idx.shape)
+                new_idx = new_idx[0] if len(new_idx) == 1 else zip(*new_idx)
+                for i, v in zip(new_idx, dok_vals, strict=True):
+                    if v:
+                        new_dok._dict[i] = v
         return new_dok
 
     # 2D get methods 
@@ -279,14 +292,19 @@ class _dok_base(_spbase, IndexMixin):
             if v:
                 self._dict[i] = v
             elif i in self._dict:
-                del self._dict[idx]
+                del self._dict[i]
 
     def _set_array(self, idx, x):
-        for i, v in zip(idx.ravel(), x.ravel()):
+        idx_set = idx.ravel()
+        x_set = x.ravel()
+        if len(idx_set) != len(x_set):
+            if len(x_set) == 1:
+                x_set = np.array([x_set[0]] * len(idx_set), dtype=self.dtype)
+        for i, v in zip(idx_set, x_set):
             if v:
                 self._dict[i] = v
             elif i in self._dict:
-                del self._dict[idx]
+                del self._dict[i]
 
     # 2D set methods
     def _set_intXint(self, row, col, x):
@@ -510,6 +528,9 @@ class _dok_base(_spbase, IndexMixin):
         return self.tocoo(copy=False).tocsc(copy=copy)
 
     tocsc.__doc__ = _spbase.tocsc.__doc__
+
+    def eliminate_zeros(self):
+        self._dict = {k: v for k, v in self._dict.items() if v != 0}
 
     def resize(self, *shape):
         is_array = isinstance(self, sparray)

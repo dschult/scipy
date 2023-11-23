@@ -714,42 +714,29 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
         if idx == slice(None):
             return self.copy()
         if idx.step in (1, None):
-            return self._get_submatrix(0, idx, copy=True)
+            major, minor = self._swap((0, idx))
+            ret = self._get_submatrix(major, minor, copy=True)
+            return ret.reshape(ret.shape[-1])
 
-        idx_dtype = self.indices.dtype
-        idx = np.asarray(idx, dtype=idx_dtype)
-        new_N = len(idx)
-        if new_N == 0:
-            return self.__class__((), dtype=self.dtype)
-
-        res_indptr = self.indptr.copy()
-        col_order = np.argsort(idx).astype(idx_dtype, copy=False)
-
-        nnz = res_indptr[-1]
-        res_indices = np.empty(nnz, dtype=idx_dtype)
-        res_data = np.empty(nnz, dtype=self.dtype)
-        csr_column_index2(col_order, idx, len(self.indices),
-                          self.indices, self.data, res_indices, res_data)
-        return self.__class__((res_data, res_indices, res_indptr),
-                              shape=(new_N,), copy=False)
+        _slice = self._swap((self._minor_slice, self._major_slice))[0]
+        return _slice(idx)
 
     def _get_array(self, idx):
+        idx = np.asarray(idx)
         idx_dtype = self.indices.dtype
-        idx = np.asarray(idx, dtype=idx_dtype)
-        new_N = len(idx)
-        if new_N == 0:
-            return self.__class__((), dtype=self.dtype)
+        M, N = self._swap((1, self.shape[0]))
+        row = np.zeros_like(idx, dtype=idx_dtype)
+        major, minor = self._swap((row, idx))
+        major = np.asarray(major, dtype=idx_dtype)
+        minor = np.asarray(minor, dtype=idx_dtype)
+        if minor.size == 0:
+            return self.__class__([], dtype=self.dtype)
+        new_shape = minor.shape if minor.shape[0] > 1 else (minor.shape[-1],)
 
-        res_indptr = self.indptr.copy()
-        col_order = np.argsort(idx).astype(idx_dtype, copy=False)
-
-        new_nnz = res_indptr[-1]
-        res_indices = np.empty(new_nnz, dtype=idx_dtype)
-        res_data = np.empty(new_nnz, dtype=self.dtype)
-        csr_column_index2(col_order, idx, len(self.indices),
-                          self.indices, self.data, res_indices, res_data)
-        return self.__class__((res_data, res_indices, res_indptr),
-                              shape=(new_N,), copy=False)
+        val = np.empty(major.size, dtype=self.dtype)
+        csr_sample_values(M, N, self.indptr, self.indices, self.data,
+                          major.size, major.ravel(), minor.ravel(), val)
+        return self.__class__(val.reshape(new_shape))
 
     def _get_intXint(self, row, col):
         M, N = self._swap(self.shape)
@@ -791,15 +778,15 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
         idx_dtype = self.indices.dtype
         indices = np.asarray(idx, dtype=idx_dtype).ravel()
 
-        _, N = self._swap(self.shape)
+        _, N = self._swap(self.shape if self.ndim == 2 else (1, self.shape[0]))
         M = len(indices)
-        new_shape = self._swap((M, N))
+        new_shape = self._swap((M, N)) if self.ndim == 2 else (M,)
         if M == 0:
             return self.__class__(new_shape, dtype=self.dtype)
 
         row_nnz = self.indptr[indices + 1] - self.indptr[indices]
         idx_dtype = self.indices.dtype
-        res_indptr = np.zeros(M+1, dtype=idx_dtype)
+        res_indptr = np.zeros(M + 1, dtype=idx_dtype)
         np.cumsum(row_nnz, out=res_indptr[1:])
 
         nnz = res_indptr[-1]
@@ -817,10 +804,10 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
         if idx == slice(None):
             return self.copy() if copy else self
 
-        M, N = self._swap(self.shape)
+        M, N = self._swap(self.shape if self.ndim == 2 else (1, self.shape[0]))
         start, stop, step = idx.indices(M)
         M = len(range(start, stop, step))
-        new_shape = self._swap((M, N))
+        new_shape = self._swap((M, N)) if self.ndim == 2 else (M,)
         if M == 0:
             return self.__class__(new_shape, dtype=self.dtype)
 
@@ -857,9 +844,9 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
         idx_dtype = self.indices.dtype
         idx = np.asarray(idx, dtype=idx_dtype).ravel()
 
-        M, N = self._swap(self.shape)
+        M, N = self._swap(self.shape if self.ndim == 2 else (1, self.shape[0]))
         k = len(idx)
-        new_shape = self._swap((M, k))
+        new_shape = self._swap((M, k)) if self.ndim == 2 else (k,)
         if k == 0:
             return self.__class__(new_shape, dtype=self.dtype)
 
@@ -885,7 +872,7 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
         if idx == slice(None):
             return self.copy() if copy else self
 
-        M, N = self._swap(self.shape)
+        M, N = self._swap(self.shape if self.ndim == 2 else (1, self.shape[0]))
         start, stop, step = idx.indices(N)
         N = len(range(start, stop, step))
         if N == 0:
@@ -912,14 +899,21 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
             M, N, self.indptr, self.indices, self.data, i0, i1, j0, j1)
 
         shape = self._swap((i1 - i0, j1 - j0))
+        if self.ndim == 1:
+            shape = (shape[1],)
         return self.__class__((data, indices, indptr), shape=shape,
                               dtype=self.dtype, copy=False)
 
     def _set_int(self, idx, x):
-        self._set_many(0, idx, x)
+        major, minor = self._swap((0, idx))
+        self._set_many(major, minor, x)
 
     def _set_array(self, idx, x):
-        self._set_many(0, idx, x)
+        major, minor = self._swap((np.zeros_like(idx), idx))
+        broadcast = x.shape[-1] == 1 and minor.shape[-1] != 1
+        if broadcast:
+            x = np.repeat(x.data, idx.shape[-1])
+        self._set_many(major, minor, x)
 
     def _set_intXint(self, row, col, x):
         i, j = self._swap((row, col))
@@ -985,7 +979,7 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
         self[i, j] = values
 
     def _prepare_indices(self, i, j):
-        M, N = self._swap(self.shape)
+        M, N = self._swap(self.shape if self.ndim == 2 else (1, self.shape[0]))
 
         def check_bounds(indices, bound):
             idx = indices.max()
@@ -1183,7 +1177,7 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
 
         This is an *in place* operation.
         """
-        M, N = self._swap(self.shape)
+        M, N = self._swap(self.shape if self.ndim == 2 else (1, self.shape[0]))
         _sparsetools.csr_eliminate_zeros(M, N, self.indptr, self.indices,
                                          self.data)
         self.prune()  # nnz may have changed

@@ -45,6 +45,8 @@ class IndexMixin:
         # handle 1d indexing
         if self.ndim == 1:
             idx = self._validate_indices(key)
+            if isinstance(idx, tuple) and len(idx) == 1:
+                idx = idx[0]
             if isinstance(idx, INT_TYPES):
                 return self._get_int(idx)
             elif isinstance(idx, slice):
@@ -107,12 +109,27 @@ class IndexMixin:
             idx = self._validate_indices(key)
             if isinstance(idx, INT_TYPES):
                 x = np.asarray(x, dtype=self.dtype)
-                return self._set_int(idx, x.flat[0])
-            elif isinstance(idx, slice):
+                if x.size != 1:
+                    raise ValueError('Trying to assign a sequence to an item')
+                self._set_int(idx, x.flat[0])
+                return
+
+            if isinstance(idx, slice):
                 idx = np.arange(*idx.indices(self.shape[0]))
-                return self._set_array(idx, x)
-            # assume array idx
-            return self._set_array(idx, x)
+            else:
+                idx = np.atleast_1d(idx)
+
+            # broadcast scalar to full 1d
+            if issparse(x):
+                x = x.toarray()
+            x = np.asarray(x, dtype=self.dtype)
+            if x.squeeze().shape != idx.squeeze().shape:
+                x = np.broadcast_to(x, idx.shape)
+            if x.size == 0:
+                return
+            x = x.reshape(idx.shape)
+            self._set_array(idx, x)
+            return
 
         row, col = self._validate_indices(key)
 
@@ -168,7 +185,12 @@ class IndexMixin:
         # single boolean matrix
         if ((issparse(key) or isinstance(key, np.ndarray)) and
                 key.ndim == self.ndim and key.dtype.kind == 'b'):
+            for keyN, N in zip(key.shape, self._shape):
+                if keyN > N:
+                    raise IndexError("index shape bigger than indexed array")
             idx = key.nonzero()
+            if self.ndim == 1 and len(idx) > 1:
+                idx = (idx[1],)
             index = [self._asindices(ix, N) for N, ix in zip(self.shape, idx)]
             return tuple(index)
 
@@ -207,6 +229,8 @@ class IndexMixin:
                 idx = self._asindices(idx, N)
             new_indices.append(idx)
 
+        if self.ndim == 1:
+            return new_indices[0]
         return tuple(new_indices)
 
     def _asindices(self, idx, length):
