@@ -1,0 +1,28 @@
+M, N, K, density, seed = 100, 400, 500, 0.01, 42
+#assert (M, N, K, density, seed), "need something like: M, N, K, density, seed = 3, 4, 5, 0.1, 42"
+
+from try_csr_matcsc import *
+
+rng = np.random.default_rng(seed)
+A = sp.sparse.random(M, K, density=density, random_state=rng).tocsr()
+B = sp.sparse.random(K, N, density=density, random_state=rng).tocsc()
+
+print("A (shape  nnz): ",A.shape,A.nnz,M,K,density*M*K)
+print("B (shape  nnz): ",B.shape,B.nnz,K,N,density*N*K)
+
+Cnew = csr_matmul_csc(A, B)
+#print(Cnew.indptr)
+#print(Cnew.indices)
+#print(Cnew.data)
+Ctot = A.toarray() @ B.toarray()
+assert np.array_equal(Ctot, Cnew.toarray())
+
+print()
+print("Timing csr_matmul_csc")
+%timeit csr_matmul_csc(A, B)  # time csr*csc method
+print("Timing sp.sparse (i.e. csr_matmat)")
+%timeit A@B  # time current sparse multiply
+print("Timing csr_dense")
+%timeit A@B.toarray()  # time csr sparse multiply dense
+print("Timing dense")
+%timeit A.toarray()@B.toarray()  # time dense

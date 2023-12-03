@@ -61,6 +61,8 @@ __all__ = [  # noqa: F822
     'csr_hstack',
     'csr_le_csr',
     'csr_lt_csr',
+    'csr_matcsc',
+    'csr_matcsc_maxnnz',
     'csr_matmat',
     'csr_matmat_maxnnz',
     'csr_matvec',

@@ -1,6 +1,7 @@
 #ifndef __CSR_H__
 #define __CSR_H__
 
+#include <iostream>
 #include <set>
 #include <vector>
 #include <algorithm>
@@ -670,6 +671,149 @@ void csr_matmat(const I n_row,
 
 
 /*
+ * Compute C = A*B for CSR matrix A and CSC matrix B
+ *
+ *
+ * Input Arguments:
+ *   I  n_row       - number of rows in A
+ *   I  n_col       - number of columns in B (hence C is n_row by n_col)
+ *   I  Ap[n_row+1] - row pointer
+ *   I  Aj[nnz(A)]  - column indices
+ *   T  Ax[nnz(A)]  - nonzeros
+ *   I  Bp[?]       - column pointer
+ *   I  Bi[nnz(B)]  - row indices
+ *   T  Bx[nnz(B)]  - nonzeros
+ * Output Arguments:
+ *   I  Cp[n_row+1] - row pointer
+ *   I  Cj[nnz(C)]  - column indices
+ *   T  Cx[nnz(C)]  - nonzeros
+ *
+ * Note:
+ *   Output arrays Cp, Cj, and Cx must be preallocated.
+ *   In order to find the appropriate type for T, csr_matcsc_maxnnz can be used
+ *   to find nnz(C).
+ *
+ * Note:
+ *   Input:  A column and B row indices *are* assumed to be in sorted order
+ *   Output: C column indices *are not* assumed to be in sorted order
+ *           Cx will not contain any zero entries
+ *
+ *   Complexity: O(n_row_A*n_col_B*K)
+ *                 where K is the maximum nnz in a row of A
+ *                 and column of B.
+ *
+ */
+
+/*
+ * Compute the number of non-zeroes (nnz) in the result of C = A * B.
+ *
+ */
+template <class I>
+npy_intp csr_matcsc_maxnnz(const I n_row,
+                           const I n_col,
+                           const I Ap[],
+                           const I Aj[],
+                           const I Bp[],
+                           const I Bi[])
+{
+    npy_intp nnz = 0;
+    for(I i = 0; i < n_row; i++){
+        I Arow_start = Ap[i];
+        I Arow_end = Ap[i+1];
+        if (Arow_end > Arow_start){
+            npy_intp row_nnz = 0;
+            for(I j = 0; j < n_col; j++){
+                I Bcol_start = Bp[j];
+                I Bcol_end = Bp[j+1];
+
+                I Ak = Arow_start;
+                I Bk = Bcol_start;
+                while (Ak < Arow_end & Bk < Bcol_end){
+                    I Acol = Aj[Ak];
+                    I Bcol = Bi[Bk];
+                    if (Acol < Bcol){
+                        Ak++;
+                    } else if (Acol > Bcol){
+                        Bk++;
+                    } else { /* Acol == Bcol -- a possible nonzero */
+                        row_nnz++;
+                        break;
+                    }
+                }
+            }
+            if (row_nnz > NPY_MAX_INTP - nnz) {
+                /*
+                 * Index overflowed. Note that row_nnz <= n_col and cannot overflow
+                 */
+                throw std::overflow_error("nnz of the result is too large");
+            }
+            npy_intp next_nnz = nnz + row_nnz;
+            nnz = next_nnz;
+        }
+    }
+    return nnz;
+}
+
+/*
+ * Compute CSR entries for matrix C = A*B.
+ *
+ */
+template <class I, class T>
+void csr_matcsc(const I n_row,
+                const I n_col,
+                const I Ap[],
+                const I Aj[],
+                const T Ax[],
+                const I Bp[],
+                const I Bi[],
+                const T Bx[],
+                      I Cp[],
+                      I Cj[],
+                      T Cx[])
+{
+    I nnz = 0;
+    T sum = 0;
+    Cp[0] = 0;
+    for(I i = 0; i < n_row; i++){
+        I Arow_start = Ap[i];
+        I Arow_end = Ap[i+1];
+        if (Arow_end > Arow_start){
+            for(I j = 0; j < n_col; j++){
+                I Bcol_start = Bp[j];
+                I Bcol_end = Bp[j+1];
+
+                I Ak = Arow_start;
+                I Bk = Bcol_start;
+                while (Ak < Arow_end & Bk < Bcol_end){
+                    I Acol = Aj[Ak];
+                    I Brow = Bi[Bk];
+                    if (Acol < Brow){
+                        Ak++;
+                    } else if (Acol > Brow){
+                        Bk++;
+                    } else { // Acol == Brow -- a possible nonzero
+                        sum += Ax[Ak] * Bx[Bk];
+                        Ak++;
+                        Bk++;
+                    }
+                }
+                if (sum != 0){
+                    Cj[nnz] = j;
+                    Cx[nnz] = sum;
+                    nnz++;
+                    sum = 0;
+                }
+            }
+//        std::cout << nnz << ", ";
+        }
+        Cp[i+1] = nnz;
+//        std::cout << "\n";
+    }
+}
+
+
+/*
+ *
  * Compute C = A (binary_op) B for CSR matrices that are not
  * necessarily canonical CSR format.  Specifically, this method
  * works even when the input matrices have duplicate and/or
@@ -1709,6 +1853,7 @@ inline int test_throw_error() {
   extern template void csr_sort_indices(const I n_row, const I Ap[], I Aj[], T Ax[]); \
   extern template void csr_tocsc(const I n_row, const I n_col, const I Ap[], const I Aj[], const T Ax[], I Bp[], I Bi[], T Bx[]); \
   extern template void csr_toell(const I n_row, const I n_col, const I Ap[], const I Aj[], const T Ax[], const I row_length, I Bj[], T Bx[]); \
+  extern template void csr_matcsc(const I n_row, const I n_col, const I Ap[], const I Aj[], const T Ax[], const I Bp[], const I Bj[], const T Bx[], I Cp[], I Cj[], T Cx[]); \
   extern template void csr_matmat(const I n_row, const I n_col, const I Ap[], const I Aj[], const T Ax[], const I Bp[], const I Bj[], const T Bx[], I Cp[], I Cj[], T Cx[]); \
   extern template void csr_binop_csr(const I n_row, const I n_col, const I Ap[], const I Aj[], const T Ax[], const I Bp[], const I Bj[], const T Bx[], I Cp[], I Cj[], T Cx[], const std::not_equal_to<T>& op); \
   extern template void csr_binop_csr(const I n_row, const I n_col, const I Ap[], const I Aj[], const T Ax[], const I Bp[], const I Bj[], const T Bx[], I Cp[], I Cj[], T Cx[], const std::less<T>& op); \

@@ -78,6 +78,8 @@ csc_ge_csc          v iiIITIIT*I*I*B
 CSR_ROUTINES = """
 csr_matmat_maxnnz   l iiIIII
 csr_matmat          v iiIITIIT*I*I*T
+csr_matcsc_maxnnz   l iiIIII
+csr_matcsc          v iiIITIIT*I*I*T
 csr_diagonal        v iiiIIT*T
 csr_tocsc           v iiIIT*I*I*T
 csr_tobsr           v iiiiIIT*I*I*T
