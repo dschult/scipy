@@ -285,6 +285,7 @@ from ._dok import *
 from ._coo import *
 from ._dia import *
 from ._bsr import *
+from ._uni import *
 from ._construct import *
 from ._extract import *
 from ._matrix import spmatrix

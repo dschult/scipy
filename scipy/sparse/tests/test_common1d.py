@@ -12,7 +12,7 @@ from numpy.testing import (assert_equal, assert_array_equal,
         assert_allclose,suppress_warnings)
 
 from scipy.sparse import (coo_array, csr_array, csc_array,
-                          dok_array, sparray, issparse,
+                          dok_array, uni_array, sparray, issparse,
                           SparseEfficiencyWarning)
 from scipy.sparse._sputils import supported_dtypes, isscalarlike, matrix
 
@@ -84,9 +84,9 @@ class _Common1D:
             e = a @ a.tocsr()
             f = a @ a.tocoo()
             for m in [a,b,c,d,e,f]:
-                assert_equal(m.toarray(), a.toarray()@a.toarray())
+                assert_equal(toarray(m), a.toarray()@a.toarray())
                 assert_equal(m.dtype, mytype)
-                assert_equal(m.toarray().dtype, mytype)
+                assert_equal(toarray(m).dtype, mytype)
 
 #    @pytest.mark.skip(reason="tocsr() not valid for 1d sparse array")
     def test_abs(self):
@@ -113,12 +113,12 @@ class _Common1D:
         assert_equal(-A, (-self.spcreator(A)).toarray())
 
     def test_real(self):
-        D = np.array([[1 + 3j, 2 - 4j]])
+        D = np.array([1 + 3j, 2 - 4j])
         A = self.spcreator(D)
         assert_equal(A.real.toarray(), D.real)
 
     def test_imag(self):
-        D = np.array([[1 + 3j, 2 - 4j]])
+        D = np.array([1 + 3j, 2 - 4j])
         A = self.spcreator(D)
         assert_equal(A.imag.toarray(), D.imag)
 
@@ -227,8 +227,12 @@ class _Common1D:
         dat = np.array([[0, 1, 2],
                      [3, -4, 5],
                      [-6, 7, 9]])
-        datsp = self.spcreator(dat)
 
+        if self.spcreator._format == 'uni':
+            pytest.raises(ValueError, self.spcreator, dat)
+            return
+
+        datsp = self.spcreator(dat)
         pytest.raises(ValueError, datsp.mean, axis=3)
         pytest.raises(TypeError, datsp.mean, axis=(0, 1))
         pytest.raises(TypeError, datsp.mean, axis=1.5)
@@ -421,7 +425,11 @@ class _Common1D:
 
 #    @pytest.mark.skip(reason="tocsr() not valid for 1d sparse array")
     def test_sub(self):
-        def check(dtype):
+        for dtype in self.math_dtypes:
+            if dtype == np.dtype('bool'):
+                # boolean array subtraction deprecated in 1.9.0
+                continue
+
             dat = self.dat_dtypes[dtype]
             datsp = self.datsp_dtypes[dtype]
 
@@ -434,13 +442,6 @@ class _Common1D:
 
             # test broadcasting
             assert_array_equal(datsp.toarray() - dat[0], dat - dat[0])
-
-        for dtype in self.math_dtypes:
-            if dtype == np.dtype('bool'):
-                # boolean array subtraction deprecated in 1.9.0
-                continue
-
-            check(dtype)
 
     def test_rsub(self):
         def check(dtype):
@@ -522,17 +523,19 @@ class _Common1D:
         # Some arrays can't be cast as spmatrices (A,C,L) so leave
         # them out.
         Asp = self.spcreator(A)
-        Bsp = self.spcreator(B)
         Csp = self.spcreator(C)
-        Dsp = self.spcreator(D)
-        Esp = self.spcreator(E)
-        Fsp = self.spcreator(F)
         Gsp = self.spcreator(G)
-        Hsp = self.spcreator(H)
-        Hspp = self.spcreator(H[0,None])
-        Jsp = self.spcreator(J)
-        Jspp = self.spcreator(J[:,0,None])
-        Ksp = self.spcreator(K)
+        # 2d arrays
+        creator = self.spcreator if Asp.format != 'uni' else csr_array
+        Bsp = creator(B)
+        Dsp = creator(D)
+        Esp = creator(E)
+        Fsp = creator(F)
+        Hsp = creator(H)
+        Hspp = creator(H[0,None])
+        Jsp = creator(J)
+        Jspp = creator(J[:,0,None])
+        Ksp = creator(K)
 
         matrices = [A, B, C, D, E, F, G, H, J, K, L]
         spmatrices = [Asp, Bsp, Csp, Dsp, Esp, Fsp, Gsp, Hsp, Hspp, Jsp, Jspp, Ksp]
@@ -632,7 +635,8 @@ class _Common1D:
 #    @pytest.mark.skip(reason="tocsr() not valid for 1d sparse array")
     def test_matmul(self):
         M = self.spcreator([2,0,3.0])
-        B = self.spcreator(array([[0,1],[1,0],[0,2]],'d'))
+        creator = self.spcreator if M.format != 'uni' else csr_array
+        B = creator(array([[0,1],[1,0],[0,2]],'d'))
         col = np.array([[1,2,3]]).T
 
         matmul = operator.matmul
@@ -749,10 +753,13 @@ class _Common1D:
         f = np.ones([5, 5])
 
         asp = self.spcreator(a)
-        dsp = self.spcreator(d)
+        creator = self.spcreator if asp.format != 'uni' else csr_array
+        dsp = creator(d)
+        # bad shape for addition
+        pytest.raises(ValueError, asp.__add__, dsp)
 
         # matrix product.
-        assert_array_equal(asp.dot(asp).toarray(), np.dot(a, a))
+        assert_equal(asp.dot(asp), np.dot(a, a))
 
         # bad matrix products
         pytest.raises(ValueError, asp.dot, f)
@@ -769,9 +776,6 @@ class _Common1D:
 
         # Addition
         assert_array_equal(asp.__add__(asp).toarray(), a.__add__(a))
-
-        # bad addition
-        pytest.raises(ValueError, asp.__add__, dsp)
 
     def test_resize(self):
         # resize(shape) resizes the matrix in-place
@@ -1244,6 +1248,14 @@ class _MinMaxMixin1D:
 
 class TestCOO1D(_Common1D, _MinMaxMixin1D):
     spcreator = coo_array
+    datsp = spcreator(_Common1D.dat1d)
+    datsp_dtypes = {}
+    for dtype in _Common1D.checked_dtypes:
+        datsp_dtypes[dtype] = spcreator(_Common1D.dat1d.astype(dtype))
+
+
+class TestUNI1D(_Common1D, _MinMaxMixin1D):
+    spcreator = uni_array
     datsp = spcreator(_Common1D.dat1d)
     datsp_dtypes = {}
     for dtype in _Common1D.checked_dtypes:

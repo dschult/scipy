@@ -32,6 +32,7 @@ python_sources = [
   '_matrix.py',
   '_spfuncs.py',
   '_sputils.py',
+  '_uni.py',
   'base.py',
   'bsr.py',
   'compressed.py',

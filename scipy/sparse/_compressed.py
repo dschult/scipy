@@ -409,12 +409,17 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
             #  2dcol * 2dcol =>  2dcol standard elementwise multiply
             #  2dcol * 2drow => 2dmatrix; 2drow broadcast to rows, 2dcol broadcast to cols
             if sM == 1 and oN == 1:
-                return other._mul_sparse_matrix(self.reshape(sM, sN).tocsc())
+                # row times a column (with broadcast), is same as switched order matmul
+                return other.reshape(oM, oN)._mul_sparse_matrix(self.reshape(sM, sN))
             if sN == 1 and oM == 1:
-                return self._mul_sparse_matrix(other.reshape(oM, oN).tocsc())
-            # Row vector times matrix. other is a row.
+                # column times a row (with broadcast), is same as matmul
+                return self._mul_sparse_matrix(other.reshape(oM, oN))
+            # broadcast row other by matmul on right with other as diagonal
             if oM == 1 and sN == oN:
-                # build diagonal csc_array/csr_array => self._csr_container
+                if sM == 1:  # same effective shape
+                    other = self.__class__(other).reshape((1, oN))
+                    return self.reshape((1, sN))._binopt(other, '_elmul_')
+                # build diagonal 2d csr_array
                 data = other.toarray().ravel()
                 indptr = np.arange(oN + 1)
                 indices = indptr[:-1]
@@ -422,21 +427,22 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
                 if self.ndim == 1:
                     return self._mul_sparse_matrix(new_other).reshape((1, oN))
                 return self._mul_sparse_matrix(new_other)
-            # self is a row.
+            # broadcast row self by matmul on right with diagonal
             if sM == 1 and sN == oN:
+                # create diagonal array in csr format
                 data = self.toarray().ravel()
                 indptr = np.arange(oN + 1)
                 indices = indptr[:-1]
-                copy = self._csr_container((data, indices, indptr))
+                copy = self._csr_container((data, indices, indptr), shape=(sN, sN))
                 return other._mul_sparse_matrix(copy)
-            # Column vector times matrix. other is a column.
+            # broadcast col other by left matmul with diagonal
             if oN == 1 and sM == oM:
                 data = other.toarray().ravel()
                 indptr = np.arange(oM + 1)
                 indices = indptr[:-1]
                 new_other = self._csr_container((data, indices, indptr))
                 return new_other._mul_sparse_matrix(self)
-            # self is a column.
+            # broadcast col self by left matmul with diagonal
             if sN == 1 and sM == oM:
                 data = self.toarray().ravel()
                 indptr = np.arange(oM + 1)
@@ -556,7 +562,7 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
         elif other.ndim == 2:
             new_shape = (N,)
         else:
-            new_shape = (1,)
+            new_shape = ()
 
         major_axis = self._swap((M, N))[0]
         other = self.__class__(other)  # convert to this format
@@ -570,9 +576,6 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
                  np.asarray(self.indices, dtype=idx_dtype),
                  np.asarray(other.indptr, dtype=idx_dtype),
                  np.asarray(other.indices, dtype=idx_dtype))
-        if nnz == 0:
-            return self.__class__(new_shape, dtype=upcast(self.dtype, other.dtype))
-
         idx_dtype = self._get_index_dtype((self.indptr, self.indices,
                                      other.indptr, other.indices),
                                     maxval=nnz)
@@ -590,6 +593,8 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
            other.data,
            indptr, indices, data)
 
+        if len(new_shape) == 0:
+            return data.ravel()
         return self.__class__((data, indices, indptr), shape=new_shape)
 
     def diagonal(self, k=0):
@@ -979,7 +984,7 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
         self[i, j] = values
 
     def _prepare_indices(self, i, j):
-        M, N = self._swap(self.shape if self.ndim == 2 else (1, self.shape[0]))
+        M, N = self._swap(self._shape_as_2d)
 
         def check_bounds(indices, bound):
             idx = indices.max()
@@ -1162,7 +1167,7 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
         else:
             x = self.tocsc()
             y = out.T
-        M, N = x._swap(x.shape) if x.ndim == 2 else (1, x.shape[0])
+        M, N = x._swap(x._shape_as_2d)
         csr_todense(M, N, x.indptr, x.indices, x.data, y)
         return out
 
@@ -1177,7 +1182,7 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
 
         This is an *in place* operation.
         """
-        M, N = self._swap(self.shape if self.ndim == 2 else (1, self.shape[0]))
+        M, N = self._swap(self._shape_as_2d)
         _sparsetools.csr_eliminate_zeros(M, N, self.indptr, self.indices,
                                          self.data)
         self.prune()  # nnz may have changed
@@ -1220,7 +1225,7 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
             return
         self.sort_indices()
 
-        M, N = self._swap(self.shape)
+        M, N = self._swap(self._shape_as_2d)
         _sparsetools.csr_sum_duplicates(M, N, self.indptr, self.indices,
                                         self.data)
 
@@ -1347,7 +1352,8 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
         other = self.__class__(other)
 
         # e.g. csr_plus_csr, csr_minus_csr, etc.
-        fn = getattr(_sparsetools, self.format + op + self.format)
+        fmt = self.format if self.format != 'uni' else 'csr'
+        fn = getattr(_sparsetools, fmt + op + fmt)
 
         maxnnz = self.nnz + other.nnz
         idx_dtype = self._get_index_dtype((self.indptr, self.indices,
@@ -1362,6 +1368,7 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
         else:
             data = np.empty(maxnnz, dtype=upcast(self.dtype, other.dtype))
 
+        # replace 2 lines with fn(*self._shape_as_2d,
         shape = self.shape if self.ndim == 2 else (1, self.shape[0])
         fn(shape[0], shape[1],
            np.asarray(self.indptr, dtype=idx_dtype),

@@ -46,7 +46,8 @@ _formats = {'csc': [0, "Compressed Sparse Column"],
             'jad': [16, "JAgged Diagonal"],
             'uss': [17, "Unsymmetric Sparse Skyline"],
             'vbr': [18, "Variable Block Row"],
-            'und': [19, "Undefined"]
+            'und': [19, "Undefined"],
+            'uni': [20, "Unified Universal 1d"],
             }
 
 
@@ -71,6 +72,11 @@ class _spbase:
     @property
     def ndim(self) -> int:
         return len(self._shape)
+
+    @property
+    def _shape_as_2d(self):
+        s = self._shape
+        return (1, s[-1]) if len(s) == 1 else s
 
     @property
     def _bsr_container(self):
