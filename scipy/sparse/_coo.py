@@ -341,22 +341,22 @@ class _coo_base(_data_matrix, _minmax_mixin):
                [0, 0, 0, 1]])
 
         """
-        if self.ndim != 2:
-            raise ValueError("Cannot convert a 1d sparse array to csr format")
         if self.nnz == 0:
             return self._csr_container(self.shape, dtype=self.dtype)
         else:
-            M,N = self.shape
+            M, N = self._shape_as_2d
             idx_dtype = self._get_index_dtype(self.coords, maxval=max(self.nnz, N))
-            row = self.row.astype(idx_dtype, copy=False)
-            col = self.col.astype(idx_dtype, copy=False)
+            col = self.coords[-1].astype(idx_dtype, copy=False)
+            if self.ndim == 1:
+                row = np.zeros_like(col)
+            else:
+                row = self.coords[-2].astype(idx_dtype, copy=False)
 
             indptr = np.empty(M + 1, dtype=idx_dtype)
             indices = np.empty_like(col, dtype=idx_dtype)
             data = np.empty_like(self.data, dtype=upcast(self.dtype))
 
-            coo_tocsr(M, N, self.nnz, row, col, self.data,
-                      indptr, indices, data)
+            coo_tocsr(M, N, self.nnz, row, col, self.data, indptr, indices, data)
 
             x = self._csr_container((data, indices, indptr), shape=self.shape)
             if not self.has_canonical_format:
