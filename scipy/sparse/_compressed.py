@@ -80,9 +80,19 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
             except Exception as e:
                 msg = f"unrecognized {self.format}_matrix constructor usage"
                 raise ValueError(msg) from e
+            #self._set_self(self.__class__(self._coo_container(arg1, dtype=dtype)))
             coo = self._coo_container(arg1, dtype=dtype)
+
+            print("coo indices dtype: ", [idx.dtype for idx in coo.indices])
+            csm = self.__class__(coo)
+            print("csm indices dtype: ", csm.indices.dtype)
+            self._set_self(csm)
+            print("self indices dtype: ", self.indices.dtype)
+
             arrays = coo._coo_to_compressed(self._swap)
+            print("_coo_to_compressed indices dtype: ", arrays[1].dtype)
             self.indptr, self.indices, self.data, self._shape = arrays
+            print("self 2 indices dtype: ", self.indices.dtype)
 
         # Read matrix dimensions given, if any
         if shape is not None:
@@ -102,6 +112,7 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
             self.data = self.data.astype(dtype, copy=False)
 
         self.check_format(full_check=False)
+        print("final indices dtype: ", self.indices.dtype)
 
     def _getnnz(self, axis=None):
         if axis is None:
