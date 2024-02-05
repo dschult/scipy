@@ -261,9 +261,14 @@ def group_columns(A, order=0):
         if order.shape != (n,):
             raise ValueError("`order` has incorrect shape.")
 
+    if issparse(A):
+        print("in group_columns. Before indexing. A.indices.dtype: ", A.indices.dtype)
     A = A[:, order]
+    if issparse(A):
+        print("in group_columns. After indexing. A.indices.dtype: ", A.indices.dtype)
 
     if issparse(A):
+        print("about to call: A.indices.dtype: ", A.indices.dtype)
         groups = group_sparse(m, n, A.indices, A.indptr)
     else:
         groups = group_dense(m, n, A)
