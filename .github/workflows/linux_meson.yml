@@ -3,10 +3,10 @@ name: Linux Meson tests
 on:
   push:
     branches:
+      - csr_setdiag_CI
       - maintenance/**
   pull_request:
     branches:
-      - csr_setdiag_CI
       - main
       - maintenance/**
 
