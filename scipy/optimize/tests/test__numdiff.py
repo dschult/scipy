@@ -42,6 +42,7 @@ def test_group_columns():
     groups_1 = group_columns(A)
     groups_2 = group_columns(A)
     assert_equal(groups_1, groups_2)
+    assert False
 
 
 def test_correct_fp_eps():
