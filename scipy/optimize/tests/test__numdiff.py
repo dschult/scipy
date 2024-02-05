@@ -24,6 +24,10 @@ def test_group_columns():
     ]
     for transform in [np.asarray, csr_matrix, csc_matrix, lil_matrix]:
         A = transform(structure)
+        if transform in (csr_matrix, csc_matrix):
+            print(transform)
+            print("Inside test__numdiff. A.indices.dtype: ", A.indices.dtype)
+            print("Inside test__numdiff. A.indptr.dtype: ", A.indptr.dtype)
         order = np.arange(6)
         groups_true = np.array([0, 1, 2, 0, 1, 2])
         groups = group_columns(A, order)
