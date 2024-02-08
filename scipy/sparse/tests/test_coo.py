@@ -168,6 +168,26 @@ def test_1d_tocsc_tocsr_todia_todok():
             f()
 
 
+def test_idx_dtype_tocsr_csc():
+    bigI = 2**33
+    A = coo_array(([2.1, 3.1], ([5, 8], [0, 1])), shape=(bigI, 2))
+    A.coords = tuple(idx.astype(np.int32) for idx in A.coords)
+    B = coo_array(([2.1, 3.1], ([5, 8], [0, 1])))
+    B.coords = tuple(idx.astype(np.int32) for idx in B.coords)
+    assert A.shape == (bigI, 2)
+    assert B.shape == (9, 2)
+    assert all(idx.dtype == np.int32 for idx in A.coords)
+    print([idx.dtype for idx in B.coords])
+    assert all(idx.dtype == np.int32 for idx in B.coords)
+
+    Bcsr = B.tocsr()
+    assert(Bcsr.indptr.dtype == np.int32)
+    assert(Bcsr.indices.dtype == np.int32)
+
+    Acsr = A.tocsr()
+    assert(Acsr.indptr.dtype == np.int32)
+    assert(Acsr.indices.dtype == np.int32)
+
 @pytest.mark.parametrize('arg', [1, 2, 4, 5, 8])
 def test_1d_resize(arg: int):
     den = np.array([1, -2, -3])
