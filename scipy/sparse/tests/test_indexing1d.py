@@ -7,6 +7,9 @@ import scipy as sp
 from .test_arithmetic1d import toarray
 
 
+formats_for_index1d = [sp.sparse.csr_array]
+
+
 @contextlib.contextmanager
 def check_remains_sorted(X):
     """Checks that sorted indices property is retained through an operation
@@ -22,22 +25,23 @@ def check_remains_sorted(X):
                        'Expected sorted indices, found unsorted')
 
 
-class _SlicingAndFancy1D:  # skip name check
+@pytest.mark.parametrize("spcreator", formats_for_index1d)
+class TestSlicingAndFancy1D:
     #####################
     #  Int-like Array Index
     #####################
-    def test_get_array_index(self):
+    def test_get_array_index(self, spcreator):
         D = np.array([4,3,0])
-        A = self.spcreator(D)
+        A = spcreator(D)
 
         assert_array_equal(A[()].toarray(), D[()])
         for ij in [(0,3), (3,)]:
-            with pytest.raises((IndexError, TypeError), match='zq'):
+            with pytest.raises(IndexError, match='out of range'):
                 A.__getitem__(ij)
 
-    def test_set_array_index(self):
+    def test_set_array_index(self, spcreator):
         dtype = np.float64
-        A = self.spcreator((12,), dtype=dtype)
+        A = spcreator((12,), dtype=dtype)
         with np.testing.suppress_warnings() as sup:
             sup.filter(
                 sp.sparse.SparseEfficiencyWarning,
@@ -45,45 +49,47 @@ class _SlicingAndFancy1D:  # skip name check
             )
             A[np.array(6)] = dtype(4.0)  # scalar index
             A[np.array(6)] = dtype(2.0)  # overwrite with scalar index
-            assert_array_equal(A.toarray(), [0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0])
+            assert_array_equal(A.toarray(), [0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0])
 
             for ij in [(13,),(-14,)]:
-                with pytest.raises(IndexError, match='zq'):
+                with pytest.raises(IndexError, match='index .* out of range'):
                     A.__setitem__(ij, 123.0)
 
             for v in [(), (0, 3), [1,2,3], np.array([1,2,3])]:
-                with pytest.raises(ValueError, match='zq'):
+                with pytest.raises(
+                    ValueError, match='Trying to assign a sequence to an item'
+                ):
                     A.__setitem__(0, v)
 
     ####################
     #  1d Slice as index
     ####################
-    def test_dtype_preservation(self):
-        assert_equal(self.spcreator((10,), dtype=np.int16)[1:5].dtype, np.int16)
-        assert_equal(self.spcreator((6,), dtype=np.int32)[0:0:2].dtype, np.int32)
-        assert_equal(self.spcreator((6,), dtype=np.int64)[:].dtype, np.int64)
+    def test_dtype_preservation(self, spcreator):
+        assert_equal(spcreator((10,), dtype=np.int16)[1:5].dtype, np.int16)
+        assert_equal(spcreator((6,), dtype=np.int32)[0:0:2].dtype, np.int32)
+        assert_equal(spcreator((6,), dtype=np.int64)[:].dtype, np.int64)
 
-    def test_get_1d_slice(self):
+    def test_get_1d_slice(self, spcreator):
         B = np.arange(50.)
-        A = self.spcreator(B)
+        A = spcreator(B)
         assert_array_equal(B[:], A[:].toarray())
         assert_array_equal(B[2:5], A[2:5].toarray())
 
         C = np.array([4, 0, 6, 0, 0, 0, 0, 0, 1])
-        D = self.spcreator(C)
+        D = spcreator(C)
         assert_array_equal(C[1:3], D[1:3].toarray())
 
         # Now test slicing when a row contains only zeros
         E = np.array([0, 0, 0, 0, 0])
-        F = self.spcreator(E)
+        F = spcreator(E)
         assert_array_equal(E[1:3], F[1:3].toarray())
         assert_array_equal(E[-2:], F[-2:].toarray())
         assert_array_equal(E[:], F[:].toarray())
         assert_array_equal(E[slice(None)], F[slice(None)].toarray())
 
-    def test_slicing_idx_slice(self):
+    def test_slicing_idx_slice(self, spcreator):
         B = np.arange(50)
-        A = self.spcreator(B)
+        A = spcreator(B)
 
         # [i]
         assert_equal(A[2], B[2])
@@ -118,17 +124,17 @@ class _SlicingAndFancy1D:  # skip name check
                 else:
                     assert_array_equal(x.toarray(), y, repr(a))
 
-    def test_ellipsis_1d_slicing(self):
+    def test_ellipsis_1d_slicing(self, spcreator):
         B = np.arange(50)
-        A = self.spcreator(B)
+        A = spcreator(B)
         assert_array_equal(A[...].toarray(), B[...])
         assert_array_equal(A[...,].toarray(), B[...,])
 
     ##########################
     #  Assignment with Slicing
     ##########################
-    def test_slice_scalar_assign(self):
-        A = self.spcreator((5,))
+    def test_slice_scalar_assign(self, spcreator):
+        A = spcreator((5,))
         B = np.zeros((5,))
         with np.testing.suppress_warnings() as sup:
             sup.filter(
@@ -143,11 +149,11 @@ class _SlicingAndFancy1D:  # skip name check
                 C[3::-1] = 9
         assert_array_equal(A.toarray(), B)
 
-    def test_slice_assign_2(self):
+    def test_slice_assign_2(self, spcreator):
         shape = (10,)
 
         for idx in [slice(3), slice(None, 10, 4), slice(5, -2)]:
-            A = self.spcreator(shape)
+            A = spcreator(shape)
             with np.testing.suppress_warnings() as sup:
                 sup.filter(
                     sp.sparse.SparseEfficiencyWarning,
@@ -159,9 +165,9 @@ class _SlicingAndFancy1D:  # skip name check
             msg = f"idx={idx!r}"
             assert_array_almost_equal(A.toarray(), B, err_msg=msg)
 
-    def test_self_self_assignment(self):
+    def test_self_self_assignment(self, spcreator):
         # Tests whether a row of one lil_matrix can be assigned to another.
-        B = self.spcreator((5,))
+        B = spcreator((5,))
         with np.testing.suppress_warnings() as sup:
             sup.filter(
                 sp.sparse.SparseEfficiencyWarning,
@@ -185,9 +191,8 @@ class _SlicingAndFancy1D:  # skip name check
             B[:-1] = A[1:]
             assert_array_equal(A[1:].toarray(), B[:-1].toarray())
 
-    @pytest.mark.skip(reason="tocsr() not valid for 1d sparse array")
-    def test_slice_assignment(self):
-        B = self.spcreator((4,))
+    def test_slice_assignment(self, spcreator):
+        B = spcreator((4,))
         expected = np.array([10, 0, 14, 0])
         block = [2, 1]
 
@@ -198,14 +203,14 @@ class _SlicingAndFancy1D:  # skip name check
             )
             B[0] = 5
             B[2] = 7
-            B[:] = B+B
+            B[:] = B + B
             assert_array_equal(B.toarray(), expected)
 
-            B[:2] = sp.sparse.csc_array(block)
+            B[:2] = sp.sparse.csr_array(block)
             assert_array_equal(B.toarray()[:2], block)
 
-    def test_set_slice(self):
-        A = self.spcreator((5,))
+    def test_set_slice(self, spcreator):
+        A = spcreator((5,))
         B = np.zeros(5, float)
         s_ = np.s_
         slices = [s_[:2], s_[1:2], s_[3:], s_[3::2],
@@ -229,35 +234,39 @@ class _SlicingAndFancy1D:  # skip name check
 
         # The next commands should raise exceptions
         toobig = list(range(100))
-        with pytest.raises(ValueError, match='zq'):
+        with pytest.raises(ValueError, match='Trying to assign a sequence to an item'):
             A.__setitem__(0, toobig)
-        with pytest.raises(ValueError, match='zq'):
+        with pytest.raises(ValueError, match='could not be broadcast together'):
             A.__setitem__(slice(None), toobig)
 
-    def test_assign_empty(self):
-        A = self.spcreator(np.ones(3))
-        B = self.spcreator((2,))
+    def test_assign_empty(self, spcreator):
+        A = spcreator(np.ones(3))
+        B = spcreator((2,))
         A[:2] = B
         assert_array_equal(A.toarray(), [0, 0, 1])
 
     ####################
     #  1d Fancy Indexing
     ####################
-    def test_dtype_preservation_empty_index(self):
-        A = self.spcreator((2,), dtype=np.int16)
+    def test_dtype_preservation_empty_index(self, spcreator):
+        A = spcreator((2,), dtype=np.int16)
         assert_equal(A[[False, False]].dtype, np.int16)
         assert_equal(A[[]].dtype, np.int16)
 
-    def test_bad_index(self):
-        A = self.spcreator(np.zeros(5))
-        with pytest.raises((IndexError, ValueError, TypeError), match='zq'):
+    def test_bad_index(self, spcreator):
+        A = spcreator(np.zeros(5))
+        with pytest.raises(
+            (IndexError, ValueError, TypeError), match='Index dimension must be 1 or 2'
+        ):
             A.__getitem__("foo")
-        with pytest.raises((IndexError, ValueError, TypeError), match='zq'):
+        with pytest.raises(
+            (IndexError, ValueError, TypeError), match='tuple index out of range'
+        ):
             A.__getitem__((2, "foo"))
 
-    def test_fancy_indexing(self):
+    def test_fancy_indexing(self, spcreator):
         B = np.arange(50)
-        A = self.spcreator(B)
+        A = spcreator(B)
 
         # [i]
         assert_equal(A[[3]].toarray(), B[[3]])
@@ -287,11 +296,11 @@ class _SlicingAndFancy1D:  # skip name check
         assert_equal(A[[-1, -5, 2, 8]][[1, -4]].toarray(),
                      B[[-1, -5, 2, 8]][[1, -4]])
 
-    def test_fancy_indexing_boolean(self):
+    def test_fancy_indexing_boolean(self, spcreator):
         np.random.seed(1234)  # make runs repeatable
 
         B = np.arange(50)
-        A = self.spcreator(B)
+        A = spcreator(B)
 
         I = np.array(np.random.randint(0, 2, size=50), dtype=bool)
 
@@ -304,19 +313,18 @@ class _SlicingAndFancy1D:  # skip name check
         Z3 = np.zeros(51, dtype=bool)
         Z3[0] = True
 
-        with pytest.raises(IndexError, match='zq'):
+        with pytest.raises(IndexError, match='array index shape .* not array shape'):
             A.__getitem__(Z1)
-        with pytest.raises(IndexError, match='zq'):
+        with pytest.raises(IndexError, match='array index shape .* not array shape'):
             A.__getitem__(Z2)
-        with pytest.raises(IndexError, match='zq'):
+        with pytest.raises(IndexError, match='array index shape .* not array shape'):
             A.__getitem__(Z3)
 
-    @pytest.mark.skip(reason="tocsr() not valid for 1d sparse array")
-    def test_fancy_indexing_sparse_boolean(self):
+    def test_fancy_indexing_sparse_boolean(self, spcreator):
         np.random.seed(1234)  # make runs repeatable
 
         B = np.arange(20)
-        A = self.spcreator(B)
+        A = spcreator(B)
 
         X = np.array(np.random.randint(0, 2, size=20), dtype=bool)
         Xsp = sp.sparse.csr_array(X)
@@ -328,21 +336,21 @@ class _SlicingAndFancy1D:  # skip name check
 
         Ysp = sp.sparse.csr_array(Y)
 
-        with pytest.raises(IndexError, match='zq'):
+        with pytest.raises(IndexError, match='array index shape .* not array shape'):
             A.__getitem__(Ysp)
-        with pytest.raises(IndexError, match='zq'):
+        with pytest.raises(IndexError, match='tuple index out of range'):
             A.__getitem__((Xsp, 1))
 
-    def test_fancy_indexing_seq_assign(self):
-        mat = self.spcreator(np.array([1, 0]))
-        with pytest.raises(ValueError, match='zq'):
+    def test_fancy_indexing_seq_assign(self, spcreator):
+        mat = spcreator(np.array([1, 0]))
+        with pytest.raises(ValueError, match='Trying to assign a sequence to an item'):
             mat.__setitem__(0, np.array([1,2]))
 
-    def test_fancy_indexing_empty(self):
+    def test_fancy_indexing_empty(self, spcreator):
         B = np.arange(50)
         B[3:9] = 0
         B[30] = 0
-        A = self.spcreator(B)
+        A = spcreator(B)
 
         K = np.array([False] * 50)
         assert_equal(toarray(A[K]), B[K])
@@ -354,18 +362,20 @@ class _SlicingAndFancy1D:  # skip name check
     ############################
     #  1d Fancy Index Assignment
     ############################
-    def test_bad_index_assign(self):
-        A = self.spcreator(np.zeros(5))
-        with pytest.raises((IndexError, ValueError, TypeError), match='zq'):
+    def test_bad_index_assign(self, spcreator):
+        A = spcreator(np.zeros(5))
+        with pytest.raises(
+            (IndexError, ValueError, TypeError), match='Index dimension must be 1 or 2'
+        ):
             A.__setitem__("foo", 2)
 
-    def test_fancy_indexing_set(self):
+    def test_fancy_indexing_set(self, spcreator):
         M = (5,)
 
         # [1:2]
         for j in [[2, 3, 4], slice(None, 10, 4), np.arange(3),
                      slice(5, -2), slice(2, 5)]:
-            A = self.spcreator(M)
+            A = spcreator(M)
             B = np.zeros(M)
             with np.testing.suppress_warnings() as sup:
                 sup.filter(
@@ -377,9 +387,9 @@ class _SlicingAndFancy1D:  # skip name check
                     A[j] = 1
             assert_array_almost_equal(A.toarray(), B)
 
-    def test_sequence_assignment(self):
-        A = self.spcreator((4,))
-        B = self.spcreator((3,))
+    def test_sequence_assignment(self, spcreator):
+        A = spcreator((4,))
+        B = spcreator((3,))
 
         i0 = [0,1,2]
         i1 = (0,1,2)
@@ -392,31 +402,31 @@ class _SlicingAndFancy1D:  # skip name check
             )
             with check_remains_sorted(A):
                 A[i0] = B[i0]
-                with pytest.raises(IndexError, match='zq'):
+                with pytest.raises(IndexError, match='tuple index out of range'):
                     B.__getitem__(i1)
                 A[i2] = B[i2]
             assert_array_equal(A[:3].toarray(), B.toarray())
             assert A.shape == (4,)
 
             # slice
-            A = self.spcreator((4,))
+            A = spcreator((4,))
             with check_remains_sorted(A):
                 A[1:3] = [10,20]
             assert_array_equal(A.toarray(), [0, 10, 20, 0])
 
             # array
-            A = self.spcreator((4,))
+            A = spcreator((4,))
             B = np.zeros(4)
             with check_remains_sorted(A):
                 for C in [A, B]:
                     C[[0,1,2]] = [4,5,6]
             assert_array_equal(A.toarray(), B)
 
-    def test_fancy_assign_empty(self):
+    def test_fancy_assign_empty(self, spcreator):
         B = np.arange(50)
         B[2] = 0
         B[[3, 6]] = 0
-        A = self.spcreator(B)
+        A = spcreator(B)
 
         K = np.array([False] * 50)
         A[K] = 42
@@ -425,65 +435,3 @@ class _SlicingAndFancy1D:  # skip name check
         K = np.array([], dtype=int)
         A[K] = 42
         assert_equal(A.toarray(), B)
-
-
-class _MinMaxMixin1D:  # skip name check
-    def test_minmax(self):
-        D = np.arange(5)
-        X = self.spcreator(D)
-
-        assert_equal(X.min(), 0)
-        assert_equal(X.max(), 4)
-        assert_equal((-X).min(), -4)
-        assert_equal((-X).max(), 0)
-
-
-    def test_minmax_axis(self):
-        D = np.arange(50)
-        X = self.spcreator(D)
-
-        for axis in [0, -1]:
-            assert_array_equal(
-                toarray(X.max(axis=axis)), D.max(axis=axis, keepdims=True)
-            )
-            assert_array_equal(
-                toarray(X.min(axis=axis)), D.min(axis=axis, keepdims=True)
-            )
-        for axis in [-2, 1]:
-            with pytest.raises(ValueError, match='zq'):
-                X.min(axis=axis)
-            with pytest.raises(ValueError, match='zq'):
-                X.max(axis=axis)
-
-
-    def test_numpy_minmax(self):
-        dat = np.array([0, 1, 2])
-        datsp = self.spcreator(dat)
-        assert_array_equal(np.min(datsp), np.min(dat))
-        assert_array_equal(np.max(datsp), np.max(dat))
-
-
-    def test_argmax(self):
-        D1 = np.array([-1, 5, 2, 3])
-        D2 = np.array([0, 0, -1, -2])
-        D3 = np.array([-1, -2, -3, -4])
-        D4 = np.array([1, 2, 3, 4])
-        D5 = np.array([1, 2, 0, 0])
-
-        for D in [D1, D2, D3, D4, D5]:
-            mat = self.spcreator(D)
-
-            assert_equal(mat.argmax(), np.argmax(D))
-            assert_equal(mat.argmin(), np.argmin(D))
-
-            assert_equal(mat.argmax(axis=0), np.argmax(D, axis=0))
-            assert_equal(mat.argmin(axis=0), np.argmin(D, axis=0))
-
-        D6 = np.empty((0,))
-
-        for axis in [None, 0]:
-            mat = self.spcreator(D6)
-            with pytest.raises(ValueError, match='zq'):
-                mat.argmax(axis=axis)
-            with pytest.raises(ValueError, match='zq'):
-                mat.argmin(axis=axis)

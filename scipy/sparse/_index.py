@@ -106,6 +106,8 @@ class IndexMixin:
         # handle 1d indexing
         if self.ndim == 1:
             idx = self._validate_indices(key)
+            if isinstance(idx, tuple) and len(idx) == 1:
+                idx = idx[0]
             if isinstance(idx, INT_TYPES):
                 x = np.asarray(x, dtype=self.dtype)
                 if x.size != 1:
@@ -181,56 +183,83 @@ class IndexMixin:
             self._set_arrayXarray(i, j, x)
 
     def _validate_indices(self, key):
-        # single boolean matrix
-        if ((issparse(key) or isinstance(key, np.ndarray)) and
-                key.ndim == self.ndim and key.dtype.kind == 'b'):
-            for keyN, N in zip(key.shape, self._shape):
-                if keyN > N:
-                    raise IndexError("index shape bigger than indexed array")
-            idx = key.nonzero()
-            if self.ndim == 1 and len(idx) > 1:
-                idx = (idx[-1],)
-            index = [self._asindices(ix, N) for N, ix in zip(self.shape, idx)]
-            return tuple(index)
-
-        # single integer
-        if isinstance(key, INT_TYPES):
-            N = self.shape[0]
-            idx = int(key)
-            if idx < -N or idx >= N:
-                raise IndexError('index (%d) out of range' % idx)
-            if idx < 0:
-                idx += N
-            return idx if self.ndim == 1 else (idx, slice(None))
-
-        # single slice
-        if isinstance(key, slice):
-            return key if self.ndim == 1 else (key, slice(None))
-
+        """Returns index tuple of intended result"""
         # single ellipsis
         if key is Ellipsis:
             return (slice(None),) * self.ndim
 
-        # form a tuple
-        indices = _unpack_index(key, self.shape)
+        if not isinstance(key, tuple):
+            key = [key]
 
-        if len(self.shape) != len(indices):
-            raise IndexError("invalid number of indices")
-        new_indices = []
-        for N, idx in zip(self.shape, indices):
-            if isintlike(idx):
-                idx = int(idx)
-                if idx < -N or idx >= N:
-                    raise IndexError('row index (%d) out of range' % idx)
-                if idx < 0:
-                    idx += N
-            elif not isinstance(idx, slice):
+        ellps_pos = None
+        none_indices = []
+        idx_shape = []
+        index = []
+        index_ndim = 0
+        for i, idx in enumerate(key):
+            if idx is Ellipsis:
+                if ellps_pos is not None:
+                    raise IndexError('an index can only have a single ellipsis')
+                ellps_pos = i
+            elif idx is None:
+                none_indices.append(i)
+            elif isinstance(idx, slice):
+                index.append(idx)
+                idx_shape.append(len(range(*idx.indices(self._shape[index_ndim]))))
+                index_ndim += 1
+            elif isintlike(idx):
+                N = self._shape[index_ndim]
+                if not (-N <= idx < N):
+                    raise IndexError(f'index ({idx}) out of range')
+                idx = int(idx + N if idx < 0 else idx)
+                index.append(idx)
+                index_ndim += 1
+            elif (ix := _compatible_boolean_index(idx)) is not None:
+                tmp_ndim = index_ndim + ix.ndim
+                mid_shape = self._shape[index_ndim:tmp_ndim]
+                if ix.shape != mid_shape:
+                    raise IndexError(
+                        f"array index shape {ix.shape} not array shape {mid_shape}"
+                    )
+                index.extend(ix.nonzero())
+                index_ndim = tmp_ndim
+                idx_shape.append(len(index[-1]))
+            elif issparse(idx):
+                # TODO: make sparse matrix indexing work for sparray
+                raise IndexError(
+                    'Indexing with sparse matrices is not supported '
+                    'except boolean indexing where matrix and index '
+                    'are equal shapes.')
+            else:  # dense array
+                N = self._shape[index_ndim]
                 idx = self._asindices(idx, N)
-            new_indices.append(idx)
+                index.append(idx)
+                index_ndim += 1
+                idx_shape.append(idx.size)
+            if index_ndim > self.ndim:
+                raise IndexError('invalid ndim for array index')
 
-        if self.ndim == 1:
-            return new_indices[0]
-        return tuple(new_indices)
+        # add slice(None) (which is colon) to fill out full index
+        nslice = self.ndim - index_ndim
+        if nslice > 0:
+            if ellps_pos is None:
+                ellps_pos = len(index)
+            index = index[:ellps_pos] + [slice(None)] * nslice + index[ellps_pos:]
+            idx_shape = idx_shape[:ellps_pos] + [1] * nslice + idx_shape[ellps_pos:]
+
+        # slide `None` into index at none_positions from input key
+        # (about 500 times faster than repeated index.insert(pos, None))
+        if none_indices:
+            new_index, old_dx = [], 0
+            for nn, ix in enumerate(none_indices):
+                dx = ix - nn
+                new_index.extend(index[old_dx:dx])
+                new_index.append(None)
+                old_dx = dx
+            new_index.extend(index[old_dx:])
+            index = new_index
+        return tuple(index) # , tuple(idx_shape)
+
 
     def _asindices(self, idx, length):
         """Convert `idx` to a valid index for an axis with a given length.
@@ -336,107 +365,25 @@ class IndexMixin:
         self._set_arrayXarray(row, col, x)
 
 
-def _unpack_index(index, desired_shape):
-    """ Parse index. Always return a ndim-tuple where each item
-    is integer, slice, or array of integers.
-    """
-    desired_ndim = len(desired_shape)
-    if isinstance(index, tuple):
-        # handle Ellipsis inside tuple
-        ellipsis_indices = [i for i, v in enumerate(index) if v is Ellipsis]
-        if ellipsis_indices:
-            if len(ellipsis_indices) > 1:
-                raise IndexError("an index can only have a single ellipsis ('...')")
-            first_ell = ellipsis_indices[0]
-
-            # handle common cases
-            # len(index) == 1 handled before this function
-            if len(index) == 2:
-                if first_ell == 0:
-                    ix = index[1] if 1 not in ellipsis_indices else slice(None)
-                    index = (slice(None), ix)
-                else:
-                    index = (index[0], slice(None))
-            # handle uncommon cases
-            else:
-                tail = [v for v in index[first_ell + 1:] if v is not Ellipsis]
-                nd = first_ell + len(tail)
-                nslice = max(0, desired_ndim - nd)
-                index = index[:first_ell] + (slice(None),) * nslice + tuple(tail)
-
-        # pad tuples
-        if len(index) < desired_ndim:
-            index = index + (slice(None),) * (desired_ndim - len(index))
-
-    # handle non-tuples
-    else:
-        idx = _compatible_boolean_index(index)  # _compatible_boolean_array??
-        if idx is None:
-            # not a boolean array. Pad with :
-            index = (index,) + (slice(None),) * (desired_ndim - 1)
-        elif idx.ndim <= desired_ndim:
-            for i, (idim, sdim) in enumerate(zip(idx.shape, desired_shape)):
-                if idim != sdim:
-                   raise IndexError("boolean index did not match index array "
-                                    f"along dimension {i}; dimension is {sdim} "
-                                    f"but corresponding boolean dimension is {idim}"
-                                    )
-            if idx.ndim == desired_ndim:
-                return idx.nonzero()
-            index = (index,) + (slice(None),) * (desired_ndim - idx.ndim)
-        else:
-            raise IndexError('invalid ndim for array index')
-
-    # process each dimension of the index
-    new_index = []
-    for idx in index:
-        if issparse(idx):
-            # TODO: make sparse matrix indexing work for sparray
-            raise IndexError(
-                'Indexing with sparse matrices is not supported '
-                'except boolean indexing where matrix and index '
-                'are equal shapes.')
-        bool_idx = _compatible_boolean_index(idx)
-        if bool_idx is not None:
-            if bool_idx.ndim > 1:
-                raise IndexError('invalid index shape')
-            idx = np.where(idx)[0]
-        new_index.append(idx)
-    return tuple(new_index)
-
-def _first_element_bool(idx, max_dim=2):
-    """Returns True if first element of the non-ndim array is boolean.
-    """
-    print("In first_element_bool. idx: ", idx)
-    try:
-        for _ in range(max_dim + 1):
-            if isinstance(idx, bool):
-                return True
-            idx = next(iter(idx), None)
-    except TypeError:
+def _compatible_boolean_index(idx, max_ndim=2):
+    """Check for boolean array or array-like. peek before asarray for array-like"""
+    if hasattr(idx, 'ndim'):
+        if idx.dtype.kind == 'b':
+            return idx
         return None
 
-
-def _compatible_boolean_index(idx):
-    """Returns a boolean index array that can be converted to
-    integer array. Returns None if no such array exists.
-    """
-    # Presence of attribute `ndim` indicates a compatible array type.
-    if hasattr(idx, 'ndim') or _first_element_bool(idx):
-        idx = np.asanyarray(idx)
-        if idx.dtype.kind == 'b':
-            ret = idx
+    # is first element boolean?
+    try:
+        ix = next(iter(idx), None)
+        for _ in range(max_ndim):
+            if isinstance(ix, bool):
+                break
+            ix = next(iter(ix), None)
         else:
-            ret = None
-    else:
-        ret = None
-    ############### Try a different way
+            return None
+    except TypeError:
+        return None
+    # since first is boolean we check the rest too (and construct array)
     idx = np.asanyarray(idx)
     if idx.dtype.kind == 'b':
-        ret2 = idx
-        print("ret, ret2:", ret,ret2)
-        assert np.array_equal(ret, ret2)
-    else:
-        ret2 = None
-        assert ret == ret2
-    return ret
+        return idx
