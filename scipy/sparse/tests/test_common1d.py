@@ -404,15 +404,13 @@ class TestGetSet1D:  # skip name check
             assert np.array_equal(A[j], D[j])
 
         for ij in [3, -4]:
-            with pytest.raises(
-                (IndexError, TypeError), match='index value out of bounds'
-            ):
+            with pytest.raises(IndexError, match='index (.*) out of range'):
                 A.__getitem__(ij)
 
         # single element tuples unwrapped
         assert A[(0,)] == 4
 
-        with pytest.raises(IndexError, match='index value out of bounds'):
+        with pytest.raises(IndexError, match='index (.*) out of range'):
             A.__getitem__((4,))
 
     def test_setelement(self, spcreator):
@@ -433,5 +431,5 @@ class TestGetSet1D:  # skip name check
             A[1,] = dtype(5)  # overwrite using 1-tuple index
 
             for ij in [13, -14, (13,), (14,)]:
-                with pytest.raises(IndexError, match='index value out of bounds'):
+                with pytest.raises(IndexError, match='index (.*) out of range'):
                     A.__setitem__(ij, 123.0)
