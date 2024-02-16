@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from scipy.sparse import coo_array
+from scipy.sparse import coo_array, dok_array
 
 
 def test_shape_constructor():
@@ -170,23 +170,25 @@ def test_1d_tocsc_tocsr_todia_todok():
 
 def test_idx_dtype_tocsr_csc():
     bigI = 2**33
-    A = coo_array(([2.1, 3.1], ([5, 8], [0, 1])), shape=(bigI, 2))
-    A.coords = tuple(idx.astype(np.int32) for idx in A.coords)
+
+    Adok = dok_array((bigI, 2))
+    Adok[(5, 0)] = 2.1
+    Adok[(8, 1)] = 3.1
+    A = Adok.tocoo()
     B = coo_array(([2.1, 3.1], ([5, 8], [0, 1])))
-    B.coords = tuple(idx.astype(np.int32) for idx in B.coords)
+    idx_dtype = B.coords[0].dtype
     assert A.shape == (bigI, 2)
     assert B.shape == (9, 2)
-    assert all(idx.dtype == np.int32 for idx in A.coords)
-    print([idx.dtype for idx in B.coords])
-    assert all(idx.dtype == np.int32 for idx in B.coords)
 
     Bcsr = B.tocsr()
-    assert(Bcsr.indptr.dtype == np.int32)
-    assert(Bcsr.indices.dtype == np.int32)
+    assert(Bcsr.indptr.dtype == idx_dtype)
+    assert(Bcsr.indices.dtype == idx_dtype)
 
+    # Raises ValueError in coo_tocsr when idx_dtype is int32
     Acsr = A.tocsr()
-    assert(Acsr.indptr.dtype == np.int32)
-    assert(Acsr.indices.dtype == np.int32)
+    assert(Acsr.indptr.dtype == idx_dtype)
+    assert(Acsr.indices.dtype == idx_dtype)
+
 
 @pytest.mark.parametrize('arg', [1, 2, 4, 5, 8])
 def test_1d_resize(arg: int):

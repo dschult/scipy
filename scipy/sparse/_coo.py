@@ -305,7 +305,7 @@ class _coo_base(_data_matrix, _minmax_mixin):
             return self._csc_container(self.shape, dtype=self.dtype)
         else:
             M,N = self.shape
-            idx_dtype = self._get_index_dtype(self.coords, maxval=max(self.nnz, M, N))
+            idx_dtype = self._get_index_dtype(self.coords, maxval=max(self.nnz, M))
             row = self.row.astype(idx_dtype, copy=False)
             col = self.col.astype(idx_dtype, copy=False)
 
@@ -347,12 +347,13 @@ class _coo_base(_data_matrix, _minmax_mixin):
             return self._csr_container(self.shape, dtype=self.dtype)
         else:
             M,N = self.shape
-            idx_dtype = self._get_index_dtype(self.coords, maxval=max(self.nnz, M, N))
+            idx_dtype = self._get_index_dtype(self.coords, maxval=max(self.nnz, N))
             row = self.row.astype(idx_dtype, copy=False)
             col = self.col.astype(idx_dtype, copy=False)
             print(idx_dtype, flush=True)
             print(row.dtype, flush=True)
             print(col.dtype, flush=True)
+            import time
 
             indptr = np.empty(M + 1, dtype=idx_dtype)
             indices = np.empty_like(col, dtype=idx_dtype)
@@ -361,8 +362,10 @@ class _coo_base(_data_matrix, _minmax_mixin):
             print(indices.dtype, flush=True)
             print(data.dtype, flush=True)
 
+            start = time.time()
             coo_tocsr(M, N, self.nnz, row, col, self.data,
                       indptr, indices, data)
+            print(f"time for coo_tocsr: {time.time() - start}s")
 
             x = self._csr_container((data, indices, indptr), shape=self.shape)
             if not self.has_canonical_format:
