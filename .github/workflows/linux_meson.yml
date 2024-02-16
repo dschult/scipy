@@ -3,7 +3,7 @@ name: Linux Meson tests
 on:
   push:
     branches:
-      - misc_sparse
+      - misc_sparse_CI
 
 permissions:
    contents: read  # to fetch code (actions/checkout)
