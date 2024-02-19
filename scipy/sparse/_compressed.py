@@ -702,34 +702,33 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
             return self.data.dtype.type(0)
         raise IndexError(f'index ({idx}) out of range')
 
-#    For now, 1d only has integer indexing. Soon we will add get_slice/array
-#    def _get_slice(self, idx):
-#        if idx == slice(None):
-#            return self.copy()
-#        if idx.step in (1, None):
-#            major, minor = self._swap((0, idx))
-#            ret = self._get_submatrix(major, minor, copy=True)
-#            return ret.reshape(ret.shape[-1])
-#
-#        _slice = self._swap((self._minor_slice, self._major_slice))[0]
-#        return _slice(idx)
-#
-#    def _get_array(self, idx):
-#        idx = np.asarray(idx)
-#        idx_dtype = self.indices.dtype
-#        M, N = self._swap((1, self.shape[0]))
-#        row = np.zeros_like(idx, dtype=idx_dtype)
-#        major, minor = self._swap((row, idx))
-#        major = np.asarray(major, dtype=idx_dtype)
-#        minor = np.asarray(minor, dtype=idx_dtype)
-#        if minor.size == 0:
-#            return self.__class__([], dtype=self.dtype)
-#        new_shape = minor.shape if minor.shape[0] > 1 else (minor.shape[-1],)
-#
-#        val = np.empty(major.size, dtype=self.dtype)
-#        csr_sample_values(M, N, self.indptr, self.indices, self.data,
-#                          major.size, major.ravel(), minor.ravel(), val)
-#        return self.__class__(val.reshape(new_shape))
+    def _get_slice(self, idx):
+        if idx == slice(None):
+            return self.copy()
+        if idx.step in (1, None):
+            major, minor = self._swap((0, idx))
+            ret = self._get_submatrix(major, minor, copy=True)
+            return ret.reshape(ret.shape[-1])
+
+        _slice = self._swap((self._minor_slice, self._major_slice))[0]
+        return _slice(idx)
+
+    def _get_array(self, idx):
+        idx = np.asarray(idx)
+        idx_dtype = self.indices.dtype
+        M, N = self._swap((1, self.shape[0]))
+        row = np.zeros_like(idx, dtype=idx_dtype)
+        major, minor = self._swap((row, idx))
+        major = np.asarray(major, dtype=idx_dtype)
+        minor = np.asarray(minor, dtype=idx_dtype)
+        if minor.size == 0:
+            return self.__class__([], dtype=self.dtype)
+        new_shape = minor.shape if minor.shape[0] > 1 else (minor.shape[-1],)
+
+        val = np.empty(major.size, dtype=self.dtype)
+        csr_sample_values(M, N, self.indptr, self.indices, self.data,
+                          major.size, major.ravel(), minor.ravel(), val)
+        return self.__class__(val.reshape(new_shape))
 
     def _get_intXint(self, row, col):
         M, N = self._swap(self.shape)
