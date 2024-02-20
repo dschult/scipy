@@ -168,6 +168,7 @@ def test_1d_tocsc_tocsr_todia_todok():
             f()
 
 
+@pytest.mark.slow
 def test_idx_dtype_tocsr_csc():
     bigI = 2**33
 
@@ -175,19 +176,22 @@ def test_idx_dtype_tocsr_csc():
     Adok[(5, 0)] = 2.1
     Adok[(8, 1)] = 3.1
     A = Adok.tocoo()
-    B = coo_array(([2.1, 3.1], ([5, 8], [0, 1])))
-    idx_dtype = B.coords[0].dtype
+    idx_dtype = A.coords[0].dtype
     assert A.shape == (bigI, 2)
-    assert B.shape == (9, 2)
 
-    Bcsr = B.tocsr()
-    assert(Bcsr.indptr.dtype == idx_dtype)
-    assert(Bcsr.indices.dtype == idx_dtype)
-
-    # Raises ValueError in coo_tocsr when idx_dtype is int32
+    # tocsr() raises ValueError in coo_tocsr for int32 idx_dtype
+    # All shape values should be included to find idx_dtype 
     Acsr = A.tocsr()
     assert(Acsr.indptr.dtype == idx_dtype)
     assert(Acsr.indices.dtype == idx_dtype)
+    
+    # csc version
+    A = A.T.tocoo()
+    assert A.shape == (2, bigI)
+    # raises ValueError if idxtype is int32
+    Acsc = A.tocsc()
+    assert(Acsc.indptr.dtype == idx_dtype)
+    assert(Acsc.indices.dtype == idx_dtype)
 
 
 @pytest.mark.parametrize('arg', [1, 2, 4, 5, 8])
