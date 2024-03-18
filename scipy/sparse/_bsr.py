@@ -220,11 +220,11 @@ class _bsr_base(_cs_matrix, _minmax_mixin):
     def __repr__(self):
         _, fmt = _formats[self.format]
         sparse_cls = 'array' if isinstance(self, sparray) else 'matrix'
-        shape_str = 'x'.join(str(x) for x in self.shape)
+        shp = str(self.shape)
         blksz = 'x'.join(str(x) for x in self.blocksize)
         return (
-            f"<{shape_str} sparse {sparse_cls} of type '{self.dtype.type}'\n"
-            f"\twith {self.nnz} stored elements (blocksize = {blksz}) in {fmt} format>"
+            f"<{fmt} sparse {sparse_cls} of type '{self.dtype.type}'\n"
+            f"\twith {self.nnz} stored elements (blocksize = {blksz} and shape {shp}>"
         )
 
     def diagonal(self, k=0):
