@@ -369,6 +369,9 @@ class _spbase:
         )
 
     def __str__(self):
+        if self.nnz == 0:
+            return '(...)\t0'
+
         maxprint = self._getmaxprint()
 
         A = self.tocoo()
