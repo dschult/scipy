@@ -112,6 +112,9 @@ class _lil_base(_spbase, IndexMixin):
     count_nonzero.__doc__ = _spbase.count_nonzero.__doc__
 
     def __str__(self):
+        if self.nnz == 0:
+            return '(...)\t0'
+
         val = ''
         for i, row in enumerate(self.rows):
             for pos, j in enumerate(row):
