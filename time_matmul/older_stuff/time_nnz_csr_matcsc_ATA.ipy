@@ -1,0 +1,52 @@
+import sys
+from try_csr_matcsc import *
+from numpy.testing import assert_array_almost_equal
+import matplotlib.pyplot as plt
+plt.ion()
+
+M, N, K, avg_col_nnz, seed = 100, 40, 1000, 5, 42
+#M, N, K, avg_col_nnz, seed = 1, 4, 50000, 500, 42
+#assert (M, N, K, density, seed), "need something like: M, N, K, density, seed = 3, 4, 5, 0.1, 42"
+density = avg_col_nnz / K  # so avg_col_nnz = K * density
+
+A = sp.sparse.csr_array((M, K), dtype='i')
+A[:,:avg_col_nnz] = 1
+B = sp.sparse.csc_array((K, N), dtype='i')
+B[:avg_col_nnz, :] = 1
+
+print("A (shape  nnz): ",A.shape,A.nnz)
+print("B (shape  nnz): ",B.shape,B.nnz)
+
+Cnew = csr_matmul_csc(A, B)
+#print(Cnew.indptr)
+#print(Cnew.indices)
+#print(Cnew.data)
+Ctot = A.toarray() @ B.toarray()
+Cold = csr_matmul_csr(A, B.tocsr())
+assert_array_almost_equal(Ctot, Cnew.toarray())
+assert_array_almost_equal(Cold.toarray(), Cnew.toarray())
+
+
+def compare_times(N=10, colnnz=1, K=10000):
+    rng = np.random.default_rng(42)
+    A = sp.sparse.random(M, K, density=colnnz/K, random_state=rng).tocsr()
+    B = A.T
+    Bcsr = B.tocsr()
+
+    print(f"{N=}, {colnnz=}")
+    print("Timing csr_matmul_csc")
+    out_rac = %timeit -o -r 7 csr_matmul_csc(A, B)  # time csr@csc method
+    print("Timing sp.sparse (i.e. csr_matmat)")
+    out_rar = %timeit -o -r 7 csr_matmul_csr(A, Bcsr)  # time csr@csr method
+
+    return out_rac.best, out_rar.best
+
+fh = open("matmul_nnz_timing_data_rand_ATA.txt", 'a')
+N=5
+colnnz=6400
+K=1100000
+
+for N in [1, 2, 8, 32]:
+    for colnnz in [2**i for i in range(0,10,2)]:
+        rc, rr = compare_times(N=N, colnnz=colnnz, K=K)
+        print(N, N, colnnz, rc, rr, rc/rr, file=fh, flush=True)
