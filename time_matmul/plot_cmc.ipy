@@ -85,7 +85,7 @@ cc = ['w' if n else 'k' for n in correct_very_best]
 plt.scatter(x, y, s=10, c=new_rat, cmap=cw, edgecolor=cc)
 #plt.plot([0, 12], [0, 14], 'm')
 
-plt.suptitle('blue means csc is faster; (88% correct)')
+plt.suptitle('blue means csc is faster; (92.2% correct)')
 t = '(nhits > 1.1*nmiss+0.5*N-0.4) | ((nhits >= nmiss) & (N == 0)) | ((M == 0) & (N+nmiss<8))'
 plt.title(t, fontsize=9)  
 plt.xlabel('log2(miss) + 0.1 * log2(N)')
