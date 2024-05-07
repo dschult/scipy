@@ -1,0 +1,143 @@
+import sys
+from try_csrmatcsc import csr_matmul
+from numpy.testing import assert_allclose
+
+import scipy as sp
+import numpy as np
+
+M, N, K, avg_col_nnz, seed = 100, 40, 1000, 5, 42
+density = avg_col_nnz / K  # so avg_col_nnz = K * density
+
+A = sp.sparse.csr_array((M, K), dtype='i')
+A[:,:avg_col_nnz] = 1
+B = sp.sparse.csc_array((K, N), dtype='i')
+B[:avg_col_nnz, :] = 1
+
+Cnew = csr_matmul(A, B)
+Ctot = A.toarray() @ B.toarray()
+Cold = csr_matmul(A, B.tocsr())
+assert_allclose(Ctot, Cnew.toarray())
+assert_allclose(Cold.toarray(), Cnew.toarray())
+
+
+def compare_times(M, N, nhits, nmiss, K):
+    rng = np.random.default_rng(42)
+    colmax = nhits + 2 * nmiss + 1
+    colnnz = nhits + nmiss
+    A = sp.sparse.csr_array((M, K), dtype='f')
+    A[:, slice(nhits)] = 1.37648
+    A[:, slice(nhits, colmax, 2)] = 1.87253
+    Bcsc = sp.sparse.csc_array((K, N), dtype='f')
+    Bcsc[slice(nhits), :] = 1.56243
+    Bcsc[slice(nhits + 1,  colmax, 2), :] = 1.923
+    Bcsr = Bcsc.tocsr()
+
+    print(f"Timing csr_matmul_csc: {M=}, {N=}, {nhits=}, {nmiss=}, {K=}")
+    out_rac = %timeit -o -r 3 csr_matmul(A, Bcsc)  # time csr@csc method
+    print(f"Timing sp.sparse: {M=}, {N=}, {nhits=}, {nmiss=}, {K=}")
+    out_rar_live = %timeit -o -r 3 A @ Bcsr  # time csr@csr method
+    print(f"Timing csr_matmul_csr: {M=}, {N=}, {nhits=}, {nmiss=}, {K=}")
+    out_rar = %timeit -o -r 3 csr_matmul(A, Bcsr)  # time csr@csr method
+
+    return out_rac.best, out_rar.best, out_rar_live.best
+
+fh = open("matmul_data.txt", 'a')
+M = 1
+N = 9
+nhits = 2
+nmiss = 2
+K = 1100000
+
+#for M in [1, 8, 32, 128]:
+#  for N in [1, 8, 32, 128]:
+#    for nhits in [10, 40, 160, 640]:
+#        for nmiss in [1, 100, 800, 3200, 10000]:
+#            rc, rr, rl = compare_times(M=M, N=N, nhits=nhits, nmiss=nmiss, K=K)
+#            print(M, N, nhits, nmiss, rc, rr, rl, rc/rr, file=fh, flush=True)
+#            if abs(rr - rl) > 1e-5:
+#                print(f"sp.sparse and this test differ: {rr=}, {rl=}")
+
+#for M in [1, 8, 32, 128]:
+#  for N in [1, 8, 32, 128]:
+#    for nhits in [1, 100, 800, 3200, 10000]:
+#        for nmiss in [10, 40, 160, 640]:
+#            rc, rr, rl = compare_times(M=M, N=N, nhits=nhits, nmiss=nmiss, K=K)
+#            print(M, N, nhits, nmiss, rc, rr, rl, rc/rr, file=fh, flush=True)
+#            if abs(rr - rl) > 1e-5:
+#                print(f"sp.sparse and this test differ: {rr=}, {rl=}")
+
+for M in [1, 8, 32, 128]:
+  for N in [1, 8, 32, 128]:
+    for nhits in [2]:
+        for nmiss in [1, 6, 10, 40, 160, 640, 3200, 10000]:
+            rc, rr, rl = compare_times(M=M, N=N, nhits=nhits, nmiss=nmiss, K=K)
+            print(M, N, nhits, nmiss, rc, rr, rl, rc/rr, file=fh, flush=True)
+            if abs(rr - rl) > 1e-5:
+                print(f"sp.sparse and this test differ: {rr=}, {rl=}")
+
+for M in [1, 8, 32, 128]:
+  for N in [1, 8, 32, 128]:
+    for nhits in [1, 6, 10, 40, 160, 640, 3200, 10000]:
+        for nmiss in [2]:
+            rc, rr, rl = compare_times(M=M, N=N, nhits=nhits, nmiss=nmiss, K=K)
+            print(M, N, nhits, nmiss, rc, rr, rl, rc/rr, file=fh, flush=True)
+            if abs(rr - rl) > 1e-5:
+                print(f"sp.sparse and this test differ: {rr=}, {rl=}")
+
+#for M in [1, 8, 32, 128]:
+#  for N in [1, 8, 32, 128]:
+#    for nhits in [10, 40, 160, 640]:
+#        for nmiss in [10, 40, 160, 640]:
+#            rc, rr, rl = compare_times(M=M, N=N, nhits=nhits, nmiss=nmiss, K=K)
+#            print(M, N, nhits, nmiss, rc, rr, rl, rc/rr, file=fh, flush=True)
+#            if abs(rr - rl) > 1e-5:
+#                print(f"sp.sparse and this test differ: {rr=}, {rl=}")
+
+#for M in [1, 8, 32, 128]:
+#  for N in [1, 8, 32, 128]:
+#    for nhits in [1, 100, 800, 3200, 10000]:
+#        for nmiss in [1, 100, 800, 3200, 10000]:
+#            rc, rr, rl = compare_times(M=M, N=N, nhits=nhits, nmiss=nmiss, K=K)
+#            print(M, N, nhits, nmiss, rc, rr, rl, rc/rr, file=fh, flush=True)
+#            if abs(rr - rl) > 1e-5:
+#                print(f"sp.sparse and this test differ: {rr=}, {rl=}")
+
+#MNhitsmiss = [
+#    (1, 64, 1, 1), (1, 64, 1, 100), (1, 64, 1, 3200), (1, 64, 1, 10000),
+#    (8, 64, 1, 1), (8, 64, 1, 100), (8, 64, 1, 3200), (8, 64, 1, 10000),
+#    (1, 64, 100, 1), (1, 64, 100, 100), (1, 64, 100, 3200), (1, 64, 100, 10000),
+#    (8, 64, 100, 1), (8, 64, 100, 100), (8, 64, 100, 3200), (8, 64, 100, 10000),
+#    (1, 64, 3200, 1), (1, 64, 3200, 100), (1, 64, 3200, 3200), (1, 64, 3200, 10000),
+#    (8, 64, 3200, 1), (8, 64, 3200, 100), (8, 64, 3200, 3200), (8, 64, 3200, 10000),
+#    (1, 64, 10000, 1), (1, 64, 10000, 100), (1, 64, 10000, 3200), (1, 64, 10000, 10000),
+#    (8, 64, 10000, 1), (8, 64, 10000, 100), (8, 64, 10000, 3200), (8, 64, 10000, 10000),
+#    (32, 32, 1, 1), (32, 32, 1, 100), (32, 32, 1, 3200), (32, 32, 1, 10000),
+#    (32, 8, 1, 1), (32, 8, 1, 100), (32, 8, 1, 3200), (32, 8, 1, 10000),
+#    (32, 1, 1, 1), (32, 1, 1, 100), (32, 1, 1, 3200), (32, 1, 1, 10000),
+#    (64, 32, 1, 1), (64, 32, 1, 100), (64, 32, 1, 3200), (64, 32, 1, 10000),
+#    (64, 8, 1, 1), (64, 8, 1, 100), (64, 8, 1, 3200), (64, 8, 1, 10000),
+#    (64, 1, 1, 1), (64, 1, 1, 100), (64, 1, 1, 3200), (64, 1, 1, 10000),
+#    (32, 32, 100, 1), (32, 32, 100, 100), (32, 32, 100, 3200), (32, 32, 100, 10000),
+#    (32, 8, 100, 1), (32, 8, 100, 100), (32, 8, 100, 3200), (32, 8, 100, 10000),
+#    (32, 1, 100, 1), (32, 1, 100, 100), (32, 1, 100, 3200), (32, 1, 100, 10000),
+#    (64, 32, 100, 1), (64, 32, 100, 100), (64, 32, 100, 3200), (64, 32, 100, 10000),
+#    (64, 8, 100, 1), (64, 8, 100, 100), (64, 8, 100, 3200), (64, 8, 100, 10000),
+#    (64, 1, 100, 1), (64, 1, 100, 100), (64, 1, 100, 3200), (64, 1, 100, 10000),
+#    (32, 32, 3200, 1), (32, 32, 3200, 100), (32, 32, 3200, 3200), (32, 32, 3200, 10000),
+#    (32, 8, 3200, 1), (32, 8, 3200, 100), (32, 8, 3200, 3200), (32, 8, 3200, 10000),
+#    (32, 1, 3200, 1), (32, 1, 3200, 100), (32, 1, 3200, 3200), (32, 1, 3200, 10000),
+#    (64, 32, 3200, 1), (64, 32, 3200, 100), (64, 32, 3200, 3200), (64, 32, 3200, 10000),
+#    (64, 8, 3200, 1), (64, 8, 3200, 100), (64, 8, 3200, 3200), (64, 8, 3200, 10000),
+#    (64, 1, 3200, 1), (64, 1, 3200, 100), (64, 1, 3200, 3200), (64, 1, 3200, 10000),
+#    (32, 32, 10000, 1), (32, 32, 10000, 100), (32, 32, 10000, 3200), (32, 32, 10000, 10000),
+#    (32, 8, 10000, 1), (32, 8, 10000, 100), (32, 8, 10000, 3200), (32, 8, 10000, 10000),
+#    (32, 1, 10000, 1), (32, 1, 10000, 100), (32, 1, 10000, 3200), (32, 1, 10000, 10000),
+#    (64, 32, 10000, 1), (64, 32, 10000, 100), (64, 32, 10000, 3200), (64, 32, 10000, 10000),
+#    (64, 8, 10000, 1), (64, 8, 10000, 100), (64, 8, 10000, 3200), (64, 8, 10000, 10000),
+#    (64, 1, 10000, 1), (64, 1, 10000, 100), (64, 1, 10000, 3200), (64, 1, 10000, 10000),
+#]
+#for M, N, nhits, nmiss in MNhitsmiss:
+#    rc, rr, rl = compare_times(M=M, N=N, nhits=nhits, nmiss=nmiss, K=K)
+#    print(M, N, nhits, nmiss, rc, rr, rl, rc/rr, file=fh, flush=True)
+#    if abs(rr - rl) > 1e-5:
+#        print(f"sp.sparse and this test differ: {rr=}, {rl=}")

@@ -1,0 +1,109 @@
+import numpy as np
+import pandas as pd
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+plt.ion()
+
+df=pd.read_csv("matmul_data.txt", sep=' ', header=0)
+
+N = np.log2(df['N'])
+M = np.log2(df['M'])
+nhits = np.log2(df['nhits'])
+nmiss = np.log2(df['nmiss'])
+ratio = df['ratio']
+lratio = np.log2(ratio)
+nnz = df['nhits']
+
+simple_csc = (nhits > nmiss) | ((nhits == nmiss) & (N == 0))
+best_csc = (nhits > nmiss+2) | ((nhits >= nmiss) & (N == 0)) | ((M == 0) & (N+nmiss<8))
+very_best_csc = (nhits > 1.1*nmiss+0.5*N-0.4) | ((nhits >= nmiss) & (N == 0)) | ((M == 0) & (N+nmiss<8))
+
+predict_csc = (nhits > nmiss) | ((nhits == nmiss) & (N == 0)) #| (M == 0)
+#predict_csc = (nhits > nmiss+2) | ((nhits >= nmiss) & (N == 0)) | ((M == 0) & (N+nmiss<8))
+#predict_csc = (nhits > 1.1*nmiss+0.5*N-0.4) | ((nhits >= nmiss) & (N == 0)) | ((M == 0) & (N+nmiss<8))
+
+correct_pred = (~ ((ratio < 1) ^ predict_csc))
+numb_right = correct_pred.sum()
+print(f"nhits > nmiss or (N==0 & nhits == nmiss): {numb_right} correct predictions: {100 * numb_right / len(predict_csc):4.2f}%")
+
+correct_best = (~ ((ratio < 1) ^ best_csc))
+best_right = correct_best.sum()
+print(f"hits > 4*miss or (N==1 & hits > miss), or (M==1 & N*miss<256): {best_right} correct predictions: {100 * best_right / len(best_csc):4.2f}%")
+
+correct_very_best = (~ ((ratio < 1) ^ very_best_csc))
+very_best_right = correct_very_best.sum()
+print(f"nhits > 1.1*nmiss+0.5*N-0.4 or (N==1 & nhits > nmiss), or (M==1 & lN*nmiss<8): {very_best_right} correct predictions: {100 * very_best_right / len(very_best_csc):4.2f}%")
+
+
+## SCALES
+lograt = np.log2(ratio)
+ratmax = lograt.max()
+ratmin = lograt.min()
+sep = 0.9
+new_rat = (lograt>0) * (sep + lograt/ratmax) + (lograt<0) * (-sep - lograt/ratmin)
+
+## PLOTS
+#colrs = mpl.colors.TwoSlopeNorm(vmin=ratio.min(), vcenter=1, vmax=ratio.max())
+cw = mpl.cm.coolwarm
+
+fig = plt.figure(1)
+plt.clf()
+
+x = nmiss + 0.10 * N
+y = nhits + 0.10 * M
+cc = ['w' if n else 'k' for n in correct_pred]
+
+plt.scatter(x, y, s=10, c=new_rat, cmap=cw, edgecolor=cc)
+#plt.plot([0, 12], [0, 14], 'm')
+
+plt.suptitle('blue means csc is faster; (88% correct)')
+plt.title('prediction: if hits > miss or (hits==miss and N=1)')
+plt.xlabel('log2(miss) + 0.1 * log2(N)')
+plt.ylabel('log2(hits) + 0.1 * log2(M)')
+
+fig = plt.figure(2)
+plt.clf()
+
+x = nmiss * 0.10 + N
+y = nhits * 0.10 + M
+cc = ['w' if n else 'k' for n in correct_pred]
+
+plt.scatter(x, y, s=10, c=new_rat, cmap=cw, edgecolor=cc)
+
+plt.suptitle('blue means csc is faster; (88-92% correct)')
+plt.title('prediction: if hits > miss or (hits==miss and N=1)')
+plt.xlabel('log2(miss) * 0.1 + log2(N)')
+plt.ylabel('log2(hits) * 0.1 + log2(M)')
+
+fig = plt.figure(3)
+plt.clf()
+
+x = nmiss + 0.10 * N
+y = nhits + 0.10 * M
+cc = ['w' if n else 'k' for n in correct_very_best]
+
+plt.scatter(x, y, s=10, c=new_rat, cmap=cw, edgecolor=cc)
+#plt.plot([0, 12], [0, 14], 'm')
+
+plt.suptitle('blue means csc is faster; (92.2% correct)')
+t = '(nhits > 1.1*nmiss+0.5*N-0.4) | ((nhits >= nmiss) & (N == 0)) | ((M == 0) & (N+nmiss<8))'
+plt.title(t, fontsize=9)  
+plt.xlabel('log2(miss) + 0.1 * log2(N)')
+plt.ylabel('log2(hits) + 0.1 * log2(M)')
+
+
+fig = plt.figure(4)
+plt.clf()
+
+# take out special case of N=1 or M=1
+mask = (N>0) & (M>0)
+x = xx[~mask]
+y = yy[~mask]
+rat = new_rat[~mask]
+correct = correct_best[~mask]
+predict = predict_csc[~mask]
+cc = ['w' if n else 'k' for n in correct]
+
+plt.scatter(x, y, s=10, c= rat, cmap=cw, edgecolor=cc)
+plt.suptitle('blue means predict csc is faster')
+#plt.title('predict: if hits > miss or hits==miss and N=1')
