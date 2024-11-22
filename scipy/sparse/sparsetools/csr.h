@@ -704,15 +704,14 @@ void csr_binop_csr_general(const I n_row, const I n_col,
     std::vector<T> B_row(n_col, 0);
 
     I nnz = 0;
-    I j=0;
     Cp[0] = 0;
 
     for(I i = 0; i < n_row; i++){
         I head   = -2;
         I length =  0;
-        I Ap_i = (n_Arow == 1) ? 0 : i;
 
         //add a row of A to A_row
+        I Ap_i = (n_Arow == 1) ? 0 : i;
         I i_start = Ap[Ap_i];
         I i_end   = Ap[Ap_i+1];
         if (n_Acol == 1){
@@ -722,7 +721,7 @@ void csr_binop_csr_general(const I n_row, const I n_col,
                 for (I j = i_start; j< i_end; j++){
                     result += Ax[j];
                 }
-                for (j = 0; j < n_col; j++){
+                for (I j = 0; j < n_col; j++){
                     A_row[j] = result;
 
                     if(next[j] == -1){
@@ -757,7 +756,7 @@ void csr_binop_csr_general(const I n_row, const I n_col,
                 for (I j = i_start; j < i_end; j++){
                     result += Bx[j];
                 }
-                for (j = 0; j < n_col; j++){
+                for (I j = 0; j < n_col; j++){
                     B_row[j] = result;
 
                     if(next[j] == -1){
@@ -831,10 +830,6 @@ void csr_binop_csr_canonical(const I n_row, const I n_col,
 {
     //Method that works for canonical CSR matrices
 
-    T Xx, zero=0;
-    I Y_pos, Y_end;
-    const T* Yx;
-    const I* Yj;
     Cp[0] = 0;
     I nnz = 0;
 
@@ -848,6 +843,11 @@ void csr_binop_csr_canonical(const I n_row, const I n_col,
             I B_pos = Bp[Bp_i];
             I A_end = Ap[Ap_i + 1];
             I B_end = Bp[Bp_i + 1];
+
+            T Xx, zero=0;
+            I Y_pos, Y_end;
+            const T* Yx;
+            const I* Yj;
 
             if (n_Acol == 1){
             // Setup Broadcast A: (A,B)->(X,Y)
