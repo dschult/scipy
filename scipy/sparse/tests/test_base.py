@@ -5481,7 +5481,6 @@ def cases_64bit(sp_api):
                 yield pytest.param(cls, method_name, marks=marks)
 
 
-@pytest.mark.skip
 class Test64Bit:
     # classes that use get_index_dtype
     MAT_CLASSES = [
@@ -5598,7 +5597,6 @@ class RunAll64Bit:
         check(cls, method_name)
 
 
-@pytest.mark.skip
 @pytest.mark.slow
 class Test64BitArray(RunAll64Bit):
     # inheritance of pytest test classes does not separate marks for subclasses.
@@ -5624,7 +5622,6 @@ class Test64BitArray(RunAll64Bit):
        self._check_resiliency(cls, method_name, fixed_dtype=np.int64)
 
 
-@pytest.mark.skip
 class Test64BitMatrix(RunAll64Bit):
     # assert_32bit=True only for spmatrix cuz sparray does not check index content
     @pytest.mark.fail_slow(5)
