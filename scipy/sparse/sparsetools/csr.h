@@ -834,9 +834,9 @@ void csr_binop_csr_canonical(const I n_row, const I n_col,
     I nnz = 0;
 
     // Broadcast column?
-    // Note: cannot broadcast same axes of both A and B
     if (n_col > 1 && (n_Acol == 1 || n_Bcol == 1)){
         for(I i = 0; i < n_row; i++){
+            // Broadcast rows in these 6 lines
             I Ap_i = (n_Arow == 1) ? 0 : i;
             I Bp_i = (n_Brow == 1) ? 0 : i;
             I A_pos = Ap[Ap_i];
@@ -849,15 +849,16 @@ void csr_binop_csr_canonical(const I n_row, const I n_col,
             const T* Yx;
             const I* Yj;
 
+            // Note: cannot broadcast same axes of both A and B
             if (n_Acol == 1){
-            // Setup Broadcast A: (A,B)->(X,Y)
+                // Setup Broadcast columns of A: (A,B)->(X,Y)
                 Xx = (A_end > A_pos) ? Ax[A_pos] : zero;
                 Y_pos = B_pos;
                 Y_end = B_end;
                 Yx = Bx;
                 Yj = Bj;
             } else {
-            // Setup Broadcast B: (B,A)->(X,Y)
+                // Setup Broadcast columns of B: (B,A)->(X,Y)
                 Xx = (B_end > B_pos) ? Bx[B_pos] : zero;
                 Y_pos = A_pos;
                 Y_end = A_end;
@@ -892,6 +893,7 @@ void csr_binop_csr_canonical(const I n_row, const I n_col,
 
     // broadcast neither column:
     for(I i = 0; i < n_row; i++){
+        // Broadcast rows in these 6 lines
         I Ap_i = (n_Arow == 1) ? 0 : i;
         I Bp_i = (n_Brow == 1) ? 0 : i;
         I A_pos = Ap[Ap_i];
