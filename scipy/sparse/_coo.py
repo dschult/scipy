@@ -16,7 +16,7 @@ from ._sparsetools import (coo_tocsr, coo_todense, coo_todense_nd,
                            coo_matmat_dense_nd)
 from ._base import issparse, SparseEfficiencyWarning, _spbase, sparray
 from ._data import _data_matrix, _minmax_mixin
-from ._sputils import (upcast_char, to_native, isshape, getdtype,
+from ._sputils import (upcast, upcast_char, to_native, isshape, getdtype,
                        getdata, downcast_intp_index, get_index_dtype,
                        check_shape, check_reshape_kwargs, isscalarlike, isdense)
 
@@ -404,7 +404,7 @@ class _coo_base(_data_matrix, _minmax_mixin):
 
         indptr = np.empty(M + 1, dtype=idx_dtype)
         indices = np.empty_like(minor, dtype=idx_dtype)
-        data = np.empty_like(self.data, dtype=self.dtype)
+        data = np.empty_like(self.data, dtype=upcast(self.dtype))
 
         coo_tocsr(M, N, nnz, major, minor, self.data, indptr, indices, data)
         return indptr, indices, data, self.shape

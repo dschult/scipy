@@ -100,6 +100,20 @@ def test_dense_constructor_with_inconsistent_shape():
         coo_array(([1], ([0], [2], [-1])))
 
 
+def test_dtype_upcast():
+    a = np.array([[3.5, 0, 1.1], [0, 0, 0]], dtype=np.float16)
+    A = coo_array(a)
+    assert A.dtype == np.float16
+    assert (A + A).dtype == np.float32
+    assert A.tocsr().dtype == np.float32
+    B = coo_array(np.array([[0., 0.], [1., 0.], [2., 2.]], dtype=np.float16))
+    assert (A @ B).dtype == np.float32
+    with pytest.raises(ValueError, match="does not support dtype"):
+        A.T
+    with pytest.raises(ValueError, match="does not support dtype"):
+        A.reshape((3,2))
+
+
 def test_1d_sparse_constructor():
     empty1d = coo_array((3,))
     res = coo_array(empty1d)
