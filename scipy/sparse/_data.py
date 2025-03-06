@@ -210,7 +210,8 @@ class _minmax_mixin:
         if out is not None:
             raise ValueError("Sparse arrays do not support an 'out' parameter.")
 
-        validateaxis(axis)
+        axis = validateaxis(axis, ndim=self.ndim)
+
         if self.ndim == 1:
             if axis not in (None, 0, -1):
                 raise ValueError("axis out of range")
@@ -228,20 +229,11 @@ class _minmax_mixin:
                 m = min_or_max(zero, m)
             return m
 
-        if axis < 0:
-            axis += 2
-
-        if (axis == 0) or (axis == 1):
-            return self._min_or_max_axis(axis, min_or_max, explicit)
-        else:
-            raise ValueError("axis out of range")
+        return self._min_or_max_axis(axis, min_or_max, explicit)
 
     def _arg_min_or_max_axis(self, axis, argmin_or_argmax, compare, explicit):
         if self.shape[axis] == 0:
             raise ValueError("Cannot apply the operation along a zero-sized dimension.")
-
-        if axis < 0:
-            axis += 2
 
         zero = self.dtype.type(0)
 

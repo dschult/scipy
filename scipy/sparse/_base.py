@@ -1,10 +1,11 @@
 """Base class for sparse matrices"""
 
+import math
 import numpy as np
 
 from ._sputils import (asmatrix, check_reshape_kwargs, check_shape,
                        get_sum_dtype, isdense, isscalarlike,
-                       matrix, validateaxis, getdtype)
+                       matrix, validateaxis, getdtype, isintlike)
 from scipy._lib._sparse import SparseABC, issparse
 
 from ._matrix import spmatrix
@@ -1142,42 +1143,37 @@ class _spbase(SparseABC):
         numpy.matrix.sum : NumPy's implementation of 'sum' for matrices
 
         """
-        validateaxis(axis)
+        vaxis = validateaxis(axis, ndim=self.ndim)
 
         # Mimic numpy's casting.
         res_dtype = get_sum_dtype(self.dtype)
+        if dtype is None:
+            dtype = res_dtype
 
-        if self.ndim == 1:
-            if axis not in (None, -1, 0):
-                raise ValueError("axis must be None, -1 or 0")
-            res = self @ np.ones(self.shape, dtype=res_dtype)
-            return res.sum(dtype=dtype, out=out)
+        if vaxis is None:
+            # summing self.data faster than @ ones()
+            # tocsr for LIL (needed either way) and DOK (faster than @)
+            if self.format in ("lil", "dok"):
+                data = self.tocsr().data
+            else:
+                data = self.data
+            ret = data.sum(dtype=dtype)
+
+            if out is not None:
+                if any(dim != 1 for dim in out.shape):
+                    raise ValueError("dimensions do not match")
+                out[...] = ret
+            return ret
 
         # We use multiplication by a matrix of ones to achieve this.
         # For some sparse array formats more efficient methods are
         # possible -- these should override this function.
-        M, N = self.shape
-
-        if axis is None:
-            # sum over rows and columns
-            return (
-                self @ self._ascontainer(np.ones((N, 1), dtype=res_dtype))
-            ).sum(dtype=dtype, out=out)
-
-        if axis < 0:
-            axis += 2
-
-        # axis = 0 or 1 now
-        if axis == 0:
+        if vaxis == 0:
             # sum over columns
-            ret = self._ascontainer(
-                np.ones((1, M), dtype=res_dtype)
-            ) @ self
-        else:
+            ret = np.ones((1, self.shape[0]), dtype=res_dtype) @ self
+        else:  # vaxis == 1:
             # sum over rows
-            ret = self @ self._ascontainer(
-                np.ones((N, 1), dtype=res_dtype)
-            )
+            ret = self @ np.ones((self.shape[1], 1), dtype=res_dtype)
 
         return ret.sum(axis=axis, dtype=dtype, out=out)
 
@@ -1218,7 +1214,7 @@ class _spbase(SparseABC):
         numpy.matrix.mean : NumPy's implementation of 'mean' for matrices
 
         """
-        validateaxis(axis)
+        axis = validateaxis(axis, ndim=self.ndim)
 
         res_dtype = self.dtype.type
         integral = (np.issubdtype(self.dtype, np.integer) or
@@ -1235,26 +1231,14 @@ class _spbase(SparseABC):
         inter_dtype = np.float64 if integral else res_dtype
         inter_self = self.astype(inter_dtype)
 
-        if self.ndim == 1:
-            if axis not in (None, -1, 0):
-                raise ValueError("axis must be None, -1 or 0")
-            res = inter_self / self.shape[-1]
-            return res.sum(dtype=res_dtype, out=out)
-
         if axis is None:
-            return (inter_self / (self.shape[0] * self.shape[1]))\
-                .sum(dtype=res_dtype, out=out)
-
-        if axis < 0:
-            axis += 2
-
-        # axis = 0 or 1 now
-        if axis == 0:
-            return (inter_self * (1.0 / self.shape[0])).sum(
-                axis=0, dtype=res_dtype, out=out)
+            denom = math.prod(self.shape)
+        elif isintlike(axis):
+            denom = self.shape[axis]
         else:
-            return (inter_self * (1.0 / self.shape[1])).sum(
-                axis=1, dtype=res_dtype, out=out)
+            denom = math.prod(self.shape[ax] for ax in axis)
+        return (inter_self * (1.0 / denom)).sum(axis=axis, dtype=res_dtype, out=out)
+
 
     def diagonal(self, k=0):
         """Returns the kth diagonal of the array/matrix.

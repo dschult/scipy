@@ -1019,22 +1019,25 @@ class _TestCommon:
         def check(dtype, j):
             dat = self.asdense(matrices[j], dtype=dtype)
             datsp = self.spcreator(dat, dtype=dtype)
+            # handle single-precision floats for NonCanonical case. see _NonCanonicalMixin
+            rtol = 1e-05 if dtype in [np.float32, np.complex64] else 1e-07
             with np.errstate(over='ignore'):
-                assert_array_almost_equal(dat.sum(), datsp.sum())
+                assert_allclose(dat.sum(), datsp.sum(), rtol=rtol)
                 assert_equal(dat.sum().dtype, datsp.sum().dtype)
                 assert_(np.isscalar(datsp.sum(axis=None)))
-                assert_array_almost_equal(dat.sum(axis=None),
-                                          datsp.sum(axis=None))
+                assert_allclose(dat.sum(axis=None), datsp.sum(axis=None), rtol=rtol)
                 assert_equal(dat.sum(axis=None).dtype,
                              datsp.sum(axis=None).dtype)
-                assert_array_almost_equal(dat.sum(axis=0), datsp.sum(axis=0))
+                assert_allclose(dat.sum(axis=0), datsp.sum(axis=0), rtol=rtol)
                 assert_equal(dat.sum(axis=0).dtype, datsp.sum(axis=0).dtype)
-                assert_array_almost_equal(dat.sum(axis=1), datsp.sum(axis=1))
+                assert_allclose(dat.sum(axis=1), datsp.sum(axis=1), rtol=rtol)
                 assert_equal(dat.sum(axis=1).dtype, datsp.sum(axis=1).dtype)
-                assert_array_almost_equal(dat.sum(axis=-2), datsp.sum(axis=-2))
+                assert_allclose(dat.sum(axis=-2), datsp.sum(axis=-2), rtol=rtol)
                 assert_equal(dat.sum(axis=-2).dtype, datsp.sum(axis=-2).dtype)
-                assert_array_almost_equal(dat.sum(axis=-1), datsp.sum(axis=-1))
+                assert_allclose(dat.sum(axis=-1), datsp.sum(axis=-1), rtol=rtol)
                 assert_equal(dat.sum(axis=-1).dtype, datsp.sum(axis=-1).dtype)
+                assert_allclose(dat.sum(axis=(0, 1)), datsp.sum(axis=(0, 1)), rtol=rtol)
+                assert_equal(dat.sum(axis=(0, 1)).dtype, datsp.sum(axis=(0, 1)).dtype)
 
         for dtype in self.checked_dtypes:
             for j in range(len(matrices)):
@@ -1047,10 +1050,13 @@ class _TestCommon:
                      [-6, 7, 9]])
         datsp = self.spcreator(dat)
 
-        assert_raises(ValueError, datsp.sum, axis=3)
-        assert_raises(TypeError, datsp.sum, axis=(0, 1))
-        assert_raises(TypeError, datsp.sum, axis=1.5)
-        assert_raises(ValueError, datsp.sum, axis=1, out=out)
+        with assert_raises(ValueError, match="out of range"):
+            datsp.sum(axis=3)
+        with assert_raises(TypeError, match="must be an integer"):
+            datsp.sum(axis=1.5)
+        with assert_raises(ValueError, match="dimensions do not match"):
+            datsp.sum(axis=1, out=out)
+
 
     def test_sum_dtype(self):
         dat = array([[0, 1, 2],
@@ -1139,6 +1145,11 @@ class _TestCommon:
                 dat.mean(axis=-1, keepdims=keep), datsp.mean(axis=-1)
             )
             assert_equal(dat.mean(axis=-1).dtype, datsp.mean(axis=-1).dtype)
+            assert_array_almost_equal(
+                dat.mean(axis=(0, 1), keepdims=keep), datsp.mean(axis=(0, 1))
+            )
+            assert_equal(dat.mean(axis=(0, 1)).dtype, datsp.mean(axis=(0, 1)).dtype)
+
 
         for dtype in self.checked_dtypes:
             check(dtype)
@@ -1150,10 +1161,12 @@ class _TestCommon:
                      [-6, 7, 9]])
         datsp = self.spcreator(dat)
 
-        assert_raises(ValueError, datsp.mean, axis=3)
-        assert_raises(TypeError, datsp.mean, axis=(0, 1))
-        assert_raises(TypeError, datsp.mean, axis=1.5)
-        assert_raises(ValueError, datsp.mean, axis=1, out=out)
+        with assert_raises(ValueError, match="out of range"):
+            datsp.mean(axis=3)
+        with assert_raises(TypeError, match="must be an integer"):
+            datsp.mean(axis=1.5)
+        with assert_raises(ValueError, match="dimensions do not match"):
+            datsp.mean(axis=1, out=out)
 
     def test_mean_dtype(self):
         dat = array([[0, 1, 2],
@@ -3787,6 +3800,7 @@ class _TestMinMax:
             assert_array_equal(
                 X.min(axis=axis).toarray(), D.min(axis=axis, keepdims=keep)
             )
+        assert_equal(X.max(axis=(0, 1)), D.max(axis=(0, 1), keepdims=keep)
 
         for axis in axes_even:
             expected_max = D[-1, :]
@@ -3852,6 +3866,10 @@ class _TestMinMax:
         assert np.isscalar(X_nan_minimum)
         assert X_nan_minimum == np.nanmin(D)
 
+        X_nan_minimum = X.nanmin(axis=(0, 1))
+        assert np.isscalar(X_nan_minimum)
+        assert X_nan_minimum == np.nanmin(D, axis=(0, 1))
+
         axes = [-2, -1, 0, 1]
         for axis in axes:
             X_nan_maxima = X.nanmax(axis=axis)
@@ -3871,7 +3889,6 @@ class _TestMinMax:
         for fname in ('min', 'max'):
             func = getattr(datsp, fname)
             assert_raises(ValueError, func, axis=3)
-            assert_raises(TypeError, func, axis=(0, 1))
             assert_raises(TypeError, func, axis=1.5)
             assert_raises(ValueError, func, axis=1, out=1)
 
