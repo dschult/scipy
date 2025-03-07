@@ -18,7 +18,7 @@ from ._index import IndexMixin
 from ._sputils import (upcast, upcast_char, to_native, isdense, isshape,
                        getdtype, isscalarlike, isintlike, downcast_intp_index,
                        get_sum_dtype, check_shape, get_index_dtype, broadcast_shapes,
-                       is_pydata_spmatrix, validateaxis)
+                       is_pydata_spmatrix)
 
 
 class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
@@ -663,11 +663,10 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
         """Sum the array/matrix over the given axis.  If the axis is None, sum
         over both rows and columns, returning a scalar.
         """
-        axis = validateaxis(axis)
         # The _spbase base class already does axis=None and major axis efficiently
         # so we only do the case axis= minor axis
         if (self.ndim == 2 and not hasattr(self, 'blocksize') and
-                axis == self._swap((1, 0))[0]):
+                axis in self._swap(((1, -1), (0, -2)))[0]):
             # faster than multiplication for large minor axis in CSC/CSR
             res_dtype = get_sum_dtype(self.dtype)
             ret = np.zeros(len(self.indptr) - 1, dtype=res_dtype)

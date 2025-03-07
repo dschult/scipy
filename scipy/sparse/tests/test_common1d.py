@@ -136,7 +136,7 @@ class TestCommon1D:
         dat = np.array([0, 1, 2])
         datsp = spcreator(dat)
 
-        with pytest.raises(ValueError, match='axis must be None, -1 or 0'):
+        with pytest.raises(ValueError, match='axis out of range'):
             datsp.sum(axis=1)
         with pytest.raises(ValueError, match='axis out of range'):
             datsp.sum(axis=(0, 3))

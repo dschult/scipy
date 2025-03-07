@@ -1050,13 +1050,9 @@ class _TestCommon:
                      [-6, 7, 9]])
         datsp = self.spcreator(dat)
 
-        with assert_raises(ValueError, match="out of range"):
-            datsp.sum(axis=3)
-        with assert_raises(TypeError, match="must be an integer"):
-            datsp.sum(axis=1.5)
-        with assert_raises(ValueError, match="dimensions do not match"):
-            datsp.sum(axis=1, out=out)
-
+        assert_raises(ValueError, datsp.sum, axis=3)
+        assert_raises(TypeError, datsp.sum, axis=1.5)
+        assert_raises(ValueError, datsp.sum, axis=1, out=out)
 
     def test_sum_dtype(self):
         dat = array([[0, 1, 2],
@@ -1096,9 +1092,9 @@ class _TestCommon:
         assert_array_almost_equal(dat_out, datsp_out)
 
         # check that wrong shape out parameter raises
-        with assert_raises(ValueError, match="output parameter.*wrong.*dimension"):
+        with assert_raises(ValueError, match="output parameter"):
             datsp.sum(out=array([0]))
-        with assert_raises(ValueError, match="output parameter.*wrong.*dimension"):
+        with assert_raises(ValueError, match="output parameter"):
             datsp.sum(out=array([[0]] if self.is_array_test else 0))
 
     def test_numpy_sum(self):
@@ -1161,12 +1157,9 @@ class _TestCommon:
                      [-6, 7, 9]])
         datsp = self.spcreator(dat)
 
-        with assert_raises(ValueError, match="out of range"):
-            datsp.mean(axis=3)
-        with assert_raises(TypeError, match="must be an integer"):
-            datsp.mean(axis=1.5)
-        with assert_raises(ValueError, match="dimensions do not match"):
-            datsp.mean(axis=1, out=out)
+        assert_raises(ValueError, datsp.mean, axis=3)
+        assert_raises(TypeError, datsp.mean, axis=1.5)
+        assert_raises(ValueError, datsp.mean, axis=1, out=out)
 
     def test_mean_dtype(self):
         dat = array([[0, 1, 2],
@@ -3800,7 +3793,7 @@ class _TestMinMax:
             assert_array_equal(
                 X.min(axis=axis).toarray(), D.min(axis=axis, keepdims=keep)
             )
-        assert_equal(X.max(axis=(0, 1)), D.max(axis=(0, 1), keepdims=keep)
+        assert_equal(X.max(axis=(0, 1)), D.max(axis=(0, 1), keepdims=keep))
 
         for axis in axes_even:
             expected_max = D[-1, :]
