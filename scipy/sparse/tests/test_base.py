@@ -1050,8 +1050,12 @@ class _TestCommon:
                      [-6, 7, 9]])
         datsp = self.spcreator(dat)
 
-        assert_raises(ValueError, datsp.sum, axis=3)
-        assert_raises(TypeError, datsp.sum, axis=1.5)
+        with assert_raises(ValueError, match="axis out of range"):
+            datsp.sum(axis=3)
+        with assert_raises(ValueError, match="axis out of range"):
+            datsp.sum(axis=(0, 3))
+        with assert_raises(TypeError, match="axis must be an integer"):
+            datsp.sum(axis=1.5)
         assert_raises(ValueError, datsp.sum, axis=1, out=out)
 
     def test_sum_dtype(self):
@@ -1157,9 +1161,14 @@ class _TestCommon:
                      [-6, 7, 9]])
         datsp = self.spcreator(dat)
 
-        assert_raises(ValueError, datsp.mean, axis=3)
-        assert_raises(TypeError, datsp.mean, axis=1.5)
-        assert_raises(ValueError, datsp.mean, axis=1, out=out)
+        with assert_raises(ValueError, match="axis out of range"):
+            datsp.mean(axis=3)
+        with assert_raises(ValueError, match="axis out of range"):
+            datsp.mean(axis=(0, 3))
+        with assert_raises(TypeError, match="axis must be an integer"):
+            datsp.mean(axis=1.5)
+        with assert_raises(ValueError, match="doesn't match.*shape|wrong.*dimensions"):
+            datsp.mean(axis=1, out=out)
 
     def test_mean_dtype(self):
         dat = array([[0, 1, 2],

@@ -1148,10 +1148,9 @@ class _spbase(SparseABC):
         # Mimic numpy's casting.
         res_dtype = get_sum_dtype(self.dtype)
 
+        # Note: all valid 1D axis values are canonically `None` so use this code.
         if vaxis is None:
-#            ones = self._ascontainer(np.ones((self.shape[-1], 1), dtype=res_dtype))
-#            return (self @ ones).sum(dtype=dtype, out=out)
-            # tocsr for LIL (needed either way) and DOK (faster than @)
+            # Use tocsr for LIL (needed either way) and DOK (faster than @)
             if self.format in ("lil", "dok"):
                 data = self.tocsr().data
             elif self.format == "bsr":
@@ -1163,15 +1162,6 @@ class _spbase(SparseABC):
             # out is handled differently by matrix and ndarray so use as_container
             return self._ascontainer(data).sum(dtype=dtype, out=out)
 
-#            if out is not None:
-#                if any(dim != 1 for dim in out.shape):
-#                    raise ValueError("dimensions do not match")
-#                allowed_ndim = 0 if isinstance(self, sparray) else 2
-#                if out.ndim != allowed_ndim:
-#                    raise ValueError("dimensions do not match")
-#                out[...] = ret
-#            return ret
-
         # We use multiplication by a matrix of ones to achieve this.
         # For some sparse array formats more efficient methods are
         # possible -- these should override this function.
@@ -1179,13 +1169,12 @@ class _spbase(SparseABC):
             # sum over columns
             ones = self._ascontainer(np.ones((1, self.shape[0]), dtype=res_dtype))
             ret = ones @ self
-#            ret = np.ones((1, self.shape[0]), dtype=res_dtype) @ self
         else:  # vaxis == 1:
             # sum over rows
             ones = self._ascontainer(np.ones((self.shape[1], 1), dtype=res_dtype))
             ret = self @ ones
-#            ret = self @ np.ones((self.shape[1], 1), dtype=res_dtype)
 
+        # This doesn't sum anything. It handles dtype and out.
         return ret.sum(axis=axis, dtype=dtype, out=out)
 
     def mean(self, axis=None, dtype=None, out=None):
@@ -1250,7 +1239,7 @@ class _spbase(SparseABC):
             denom = math.prod(self.shape[ax] for ax in axis)
         res = (inter_self * (1.0 / denom)).sum(axis=axis, dtype=inter_dtype)
         if out is None:
-            return res.sum(axis=(), dtype=dtype)
+            return res.astype(res_dtype)
         # out is handled differently by matrix and ndarray so use as_container
         return self._ascontainer(res).sum(axis=(), dtype=dtype, out=out)
 
