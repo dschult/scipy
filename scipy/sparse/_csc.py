@@ -8,6 +8,7 @@ import numpy as np
 
 from ._matrix import spmatrix
 from ._base import _spbase, sparray
+from . import _sparsetools
 from ._sparsetools import csc_tocsr, expandptr
 from ._sputils import upcast
 
@@ -16,6 +17,41 @@ from ._compressed import _cs_matrix
 
 class _csc_base(_cs_matrix):
     _format = 'csc'
+
+    def _binopt2(self, other, op):
+        """apply the binary operation fn to two sparse matrices."""
+        other = self.__class__(other)
+
+        # e.g. csr_plus_csr, csr_minus_csr, etc.
+        fn = getattr(_sparsetools, "csr" + op + "csr")
+
+        maxnnz = self.nnz + other.nnz
+        idx_dtype = self._get_index_dtype((self.indptr, self.indices,
+                                     other.indptr, other.indices),
+                                    maxval=maxnnz)
+        indptr = np.empty(self.indptr.shape, dtype=idx_dtype)
+        indices = np.empty(maxnnz, dtype=idx_dtype)
+
+        bool_ops = ['_ne_', '_lt_', '_gt_', '_le_', '_ge_']
+        if op in bool_ops:
+            data = np.empty(maxnnz, dtype=np.bool_)
+        else:
+            data = np.empty(maxnnz, dtype=upcast(self.dtype, other.dtype))
+
+        M, N = self._swap(self._shape_as_2d)
+        fn(M, N,
+           np.asarray(self.indptr, dtype=idx_dtype),
+           np.asarray(self.indices, dtype=idx_dtype),
+           self.data,
+           np.asarray(other.indptr, dtype=idx_dtype),
+           np.asarray(other.indices, dtype=idx_dtype),
+           other.data,
+           indptr, indices, data)
+
+        A = self.__class__((data, indices, indptr), shape=self.shape)
+        A.prune()
+
+        return A
 
     def transpose(self, axes=None, copy=False):
         if axes is not None and axes != (1, 0):
