@@ -656,3 +656,55 @@ if HAVE_SCPDT:
     # ignore Matplotlib's `ax.text`:
     dt_config.stopwords.add('.text(')
 ############################################################################
+
+canonical_problem_tests = {}
+canonical_counter = {(True, True): 0, (True, False): 0,
+                     (False, True): 0, (False, False): 0}
+
+def pytest_configure():
+    pytest.canonical_problem_tests = canonical_problem_tests
+    pytest.canonical_counter = canonical_counter
+
+def pytest_collection_modifyitems(items):
+    """Modifies test items in place to put report_zero test last."""
+    name = "test_canonical_wrong"
+    idx_list = [i for i, item in enumerate(items) if name == item.name]
+    if len(idx_list) != 1:
+        return
+    idx = idx_list[0]
+    sorted_items = items[:idx] + items[idx + 1:] + [items[idx]]
+    items[:] = sorted_items
+
+
+########### _binopt call tracking ##########
+import scipy as sp
+def my_binopt(self, other,op):
+    other = self.__class__(other)
+
+    import pytest
+    import os
+    test_name = os.getenv("PYTEST_CURRENT_TEST")
+    c = pytest.canonical_counter
+    t = pytest.canonical_problem_tests
+
+    def increment_canonical(A):
+        indicator = A.has_canonical_format
+        M = A._swap(self._shape_as_2d)[0]
+        canon = sp.sparse._sparsetools.csr_has_canonical_format(M, A.indptr, A.indices)
+        both = (indicator, canon)
+        c[both] += 1
+        if both in ((False, True), (True, False)):
+            if test_name in t:
+                t[test_name].append((A, both))
+            else:
+                t[test_name] = [(A, both)]
+
+    increment_canonical(self)
+    increment_canonical(other)
+
+    return sp.sparse._compressed._cs_matrix._old_binopt(self, other, op)
+
+cs_class = sp.sparse._compressed._cs_matrix
+cs_class._old_binopt = cs_class._binopt
+cs_class._binopt = my_binopt
+#####################

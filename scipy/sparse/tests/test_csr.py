@@ -5,6 +5,17 @@ from scipy import sparse
 import pytest
 
 
+def test_canonical_wrong():
+    c = pytest.canonical_counter
+    t = pytest.canonical_problem_tests
+    print("Check `has_canonical_format` truth within a test suite.")
+    print(f"Canonical_checks={sum(c.values())}\n{c=}")
+    if t:
+        print(f"\nMismatch in canonical attribute occurs in tests:\n", t)
+        print(f"\n{'\n'.join(tt+f': {n}' for tt, n in t.items())}")
+    # assert allows pytest report to show these print statements
+    assert False
+
 def _check_csr_rowslice(i, sl, X, Xcsr):
     np_slice = X[i, sl]
     csr_slice = Xcsr[i, sl]
