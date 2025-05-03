@@ -656,6 +656,7 @@ if HAVE_SCPDT:
     # ignore Matplotlib's `ax.text`:
     dt_config.stopwords.add('.text(')
 ############################################################################
+########### _binopt call tracking ##########
 
 canonical_problem_tests = {}
 canonical_counter = {(True, True): 0, (True, False): 0,
@@ -676,7 +677,6 @@ def pytest_collection_modifyitems(items):
     items[:] = sorted_items
 
 
-########### _binopt call tracking ##########
 import scipy as sp
 def my_binopt(self, other,op):
     other = self.__class__(other)
@@ -707,4 +707,23 @@ def my_binopt(self, other,op):
 cs_class = sp.sparse._compressed._cs_matrix
 cs_class._old_binopt = cs_class._binopt
 cs_class._binopt = my_binopt
-#####################
+##################### Results from scipy test suite canonical tracking #### 5/3/2025
+#Check `has_canonical_format` truth within a test suite.
+#Canonical_checks=120836
+#c={(True, True): 110932, (True, False): 0, (False, True): 0, (False, False): 9904}
+##################### Results of networkx test suite canonical tracking #### 5/3/2025
+#Check `has_canonical_format` truth within a test suite.
+#Canonical_checks=129744
+#c={(True, True): 129738, (True, False): 0, (False, True): 0, (False, False): 6}
+##################### Results from scikit-image test suite canonical tracking #### 5/3/2025
+#Check `has_canonical_format` truth within a test suite.
+#Canonical_checks=490
+#c={(True, True): 406, (True, False): 0, (False, True): 0, (False, False): 84}
+##################### Results of scikit-learn test suite canonical tracking #### 5/3/2025
+# Check `has_canonical_format` truth within a test suite.
+# Canonical_checks=41824
+# c={(True, True): 37438, (True, False): 0, (False, True): 0, (False, False): 4386}
+##################### Results of cvxpy test suite canonical tracking #### 5/3/2025
+#Check `has_canonical_format` truth within a test suite.
+#Canonical_checks=452
+#c={(True, True): 418, (True, False): 0, (False, True): 0, (False, False): 34}
