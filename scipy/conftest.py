@@ -678,7 +678,7 @@ def pytest_collection_modifyitems(items):
 
 
 import scipy as sp
-def my_binopt(self, other,op):
+def my_binopt(self, other, op):
     other = self.__class__(other)
 
     import pytest
@@ -689,10 +689,16 @@ def my_binopt(self, other,op):
 
     def increment_canonical(A):
         indicator = A.has_canonical_format
-        M = A._swap(self._shape_as_2d)[0]
+        if A.format == "csc":
+            M = A.shape[1]
+        elif A.format == "bsr":
+            M = A.shape[0] // A.blocksize[0]
+        else:
+            M = A._shape_as_2d[0]
         canon = sp.sparse._sparsetools.csr_has_canonical_format(M, A.indptr, A.indices)
         both = (indicator, canon)
         c[both] += 1
+        #if canon == 0:
         if both in ((False, True), (True, False)):
             if test_name in t:
                 t[test_name].append((A, both))
@@ -702,11 +708,15 @@ def my_binopt(self, other,op):
     increment_canonical(self)
     increment_canonical(other)
 
-    return sp.sparse._compressed._cs_matrix._old_binopt(self, other, op)
+    return self._old_binopt(other, op)
 
 cs_class = sp.sparse._compressed._cs_matrix
 cs_class._old_binopt = cs_class._binopt
 cs_class._binopt = my_binopt
+
+bsr_class = sp.sparse._bsr._bsr_base
+bsr_class._old_binopt = bsr_class._binopt
+bsr_class._binopt = my_binopt
 ##################### Results from scipy test suite canonical tracking #### 5/3/2025
 #Check `has_canonical_format` truth within a test suite.
 #Canonical_checks=120836
@@ -727,3 +737,8 @@ cs_class._binopt = my_binopt
 #Check `has_canonical_format` truth within a test suite.
 #Canonical_checks=452
 #c={(True, True): 418, (True, False): 0, (False, True): 0, (False, False): 34}
+##################### Results of scipy test suite canonical tracking with 'bsr' format #### 5/5/2025
+#Check `has_canonical_format` truth within a test suite.
+#Canonical_checks=153572
+#c={(True, True): 140526, (True, False): 0, (False, True): 0, (False, False): 13046}
+

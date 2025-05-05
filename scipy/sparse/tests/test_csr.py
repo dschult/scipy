@@ -11,9 +11,9 @@ def test_canonical_wrong():
     print("Check `has_canonical_format` truth within a test suite.")
     print(f"Canonical_checks={sum(c.values())}\n{c=}")
     if t:
-        print(f"\nMismatch in canonical attribute occurs in tests:\n", t)
+        print(f"\nMismatch in canonical attribute occurs in tests:\n")
         print(f"\n{'\n'.join(tt+f': {n}' for tt, n in t.items())}")
-    # assert allows pytest report to show these print statements
+    # `assert False` allows pytest report to show these print statements
     assert False
 
 def _check_csr_rowslice(i, sl, X, Xcsr):
