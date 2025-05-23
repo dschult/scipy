@@ -123,12 +123,13 @@ def test_non_subscriptability():
     coo_2d = coo_array((2, 2))
 
     with pytest.raises(TypeError,
-                        match="'coo_array' object does not support item assignment"):
+                       match="coo_array assignment is not implemented yet"):
         coo_2d[0, 0] = 1
 
-    with pytest.raises(TypeError,
-                       match="'coo_array' object is not subscriptable"):
-        coo_2d[0, :]
+    coo_2d[0, :]
+#    with pytest.raises(TypeError,
+#                       match="'coo_array' object is not subscriptable"):
+#        coo_2d[0, :]
 
 def test_reshape_overflow():
     # see gh-22353 : new idx_dtype can need to be int64 instead of int32

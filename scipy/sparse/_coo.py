@@ -535,7 +535,7 @@ class _coo_base(_data_matrix, _minmax_mixin, IndexMixin):
                 coords = idx.nonzero()
                 # need to sort to find which match the nnz coords values
                 raise NotImplementedError("boolean dense indexing not yet supported")
-            if isparse(idx) and idx.dtype.type == 'b':
+            if issparse(idx) and idx.dtype.type == 'b':
                 coords = idx.tocoo().coords()
                 raise NotImplementedError("boolean dense indexing not yet supported")
 
@@ -582,7 +582,7 @@ class _coo_base(_data_matrix, _minmax_mixin, IndexMixin):
         return coo_array((new_data, new_coords), shape=new_shape, dtype=self.dtype)
 
     def __setitem__(self, key, x):
-        raise NotImplementedError("setting is not implemented yet")
+        raise TypeError("coo_array assignment is not implemented yet")
 
     def sum_duplicates(self) -> None:
         """Eliminate duplicate entries by adding them together
@@ -1639,3 +1639,9 @@ class coo_matrix(spmatrix, _coo_base):
             # storing nnz coordinates for 2D COO matrix.
             state['coords'] = (state.pop('row'), state.pop('col'))
         self.__dict__.update(state)
+
+    def __getitem__(self, key):
+        raise TypeError("'dia_matrix' object is not subscriptable")
+
+    def __setitem__(self, key):
+        raise TypeError("'dia_matrix' object does not support item assignment")
