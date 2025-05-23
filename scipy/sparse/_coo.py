@@ -19,11 +19,12 @@ from ._data import _data_matrix, _minmax_mixin
 from ._sputils import (upcast_char, to_native, isshape, getdtype,
                        getdata, downcast_intp_index, get_index_dtype,
                        check_shape, check_reshape_kwargs, isscalarlike, isdense)
+from ._index import IndexMixin
 
 import operator
 
 
-class _coo_base(_data_matrix, _minmax_mixin):
+class _coo_base(_data_matrix, _minmax_mixin, IndexMixin):
     _format = 'coo'
     _allow_nd = range(1, 65)
 
@@ -523,6 +524,65 @@ class _coo_base(_data_matrix, _minmax_mixin):
         else:
             coords = self.coords
         return self.__class__((data, coords), shape=self.shape, dtype=data.dtype)
+
+    def __getitem__(self, key):
+        index, new_shape = self._validate_indices(key)
+
+        # handle bool array indices
+        if len(index) == 1:
+            idx = index[0]
+            if isdense(idx) and idx.dtype.type == 'b':
+                coords = idx.nonzero()
+                # need to sort to find which match the nnz coords values
+                raise NotImplementedError("boolean dense indexing not yet supported")
+            if isparse(idx) and idx.dtype.type == 'b':
+                coords = idx.tocoo().coords()
+                raise NotImplementedError("boolean dense indexing not yet supported")
+
+        # handle int, slice and int-array indices
+        accum=np.ones(len(self.data), dtype=np.bool)
+        count_array = False
+        new_coords = []
+        new_array_ix = []
+        new_axis = 0
+        for i, (idx, co) in enumerate(zip(index, self.coords)):
+            if isinstance(idx, int):
+                accum &=(co==idx)
+            elif isinstance(idx, slice) and idx != slice(None):
+                no_stop = idx.stop is None
+                start, stop, step = idx.indices(self.shape[i])
+                in_range = (co >= start) if no_stop else (co >= start) & (co < stop)
+                if step != 1:
+                    new_ix, m = np.divmod(co - start, step)
+                    accum &= (m == 0) & in_range
+                else:
+                    new_ix = co - start
+                    accum &= in_range
+                new_coords.append(new_ix)
+                new_axis += 1
+            elif isinstance(idx, slice) and idx == slice(None):
+                new_coords.append(co)
+                new_axis += 1
+            else:  # array
+                count_array += 1
+                if count_array > 1:
+                    raise NotImplementedError("Advanced array indexing with two arrays not supported yet")
+                new_accum = np.isin(co, idx)
+                idx_accum, new_idx = np.where(co[:,None] == [idx])
+                accum &= new_accum
+                new_ix = -np.ones_like(co)
+                new_ix[new_accum] = new_idx
+                new_coords.append(new_ix)
+                new_axis += 1
+
+        new_data = self.data[accum]
+        if new_shape == ():
+            return new_data.sum().astype(self.data.dtype, copy=False)
+        new_coords = tuple(nco[accum] for nco in new_coords)
+        return coo_array((new_data, new_coords), shape=new_shape, dtype=self.dtype)
+
+    def __setitem__(self, key, x):
+        raise NotImplementedError("setting is not implemented yet")
 
     def sum_duplicates(self) -> None:
         """Eliminate duplicate entries by adding them together

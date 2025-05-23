@@ -243,6 +243,10 @@ class IndexMixin:
             else:  # dense array
                 index_1st.append(np.asarray(idx))
                 prelim_ndim += 1
+        if prelim_ndim > self.ndim:
+            raise IndexError(
+                f'Invalid index ndim. Array is {self.ndim}D. Index needs {prelim_ndim}D'
+            )
         ellip_slices = (self.ndim - prelim_ndim) * [slice(None)]
         if ellip_slices:
             if ellps_pos is None:
@@ -289,10 +293,6 @@ class IndexMixin:
                 index.append(idx)
                 array_indices.append(index_ndim)
                 index_ndim += 1
-        if index_ndim > self.ndim:
-            raise IndexError(
-                f'invalid index ndim. Array is {self.ndim}D. Index needs {index_ndim}D'
-            )
         if len(array_indices) > 1:
             idx_arrays = _broadcast_arrays(*(index[i] for i in array_indices))
             if any(idx_arrays[0].shape != ix.shape for ix in idx_arrays[1:]):
@@ -306,7 +306,7 @@ class IndexMixin:
             arr_index = array_indices[0]
             arr_shape = list(index[arr_index].shape)
             idx_shape = idx_shape[:arr_index] + arr_shape + idx_shape[arr_index:]
-        if (ndim := len(idx_shape)) > 2:
+        if (ndim := len(idx_shape)) > 2 and self.format != "coo":
             raise IndexError(f'Only 1D or 2D arrays allowed. Index makes {ndim}D')
         return tuple(index), tuple(idx_shape)
 
