@@ -549,13 +549,16 @@ class _coo_base(_data_matrix, _minmax_mixin, IndexMixin):
             if isinstance(idx, int):
                 accum &=(co==idx)
             elif isinstance(idx, slice) and idx != slice(None):
-                no_stop = idx.stop is None
                 start, stop, step = idx.indices(self.shape[i])
-                in_range = (co >= start) if no_stop else (co >= start) & (co < stop)
                 if step != 1:
+                    if step < 0:
+                        in_range = (co <= start) & (co > stop)
+                    else:
+                        in_range = (co >= start) & (co < stop)
                     new_ix, m = np.divmod(co - start, step)
                     accum &= (m == 0) & in_range
                 else:
+                    in_range = (co >= start) & (co < stop)
                     new_ix = co - start
                     accum &= in_range
                 new_coords.append(new_ix)

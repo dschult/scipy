@@ -245,7 +245,8 @@ class IndexMixin:
                 prelim_ndim += 1
         if prelim_ndim > self.ndim:
             raise IndexError(
-                f'Invalid index ndim. Array is {self.ndim}D. Index needs {prelim_ndim}D'
+                f'Too many indices for array. Key {key} needs {prelim_ndim}D. '
+                f'Array is {self.ndim}D'
             )
         ellip_slices = (self.ndim - prelim_ndim) * [slice(None)]
         if ellip_slices:

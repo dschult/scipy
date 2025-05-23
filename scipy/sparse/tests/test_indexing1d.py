@@ -567,7 +567,7 @@ class TestSlicingAndFancy1D:
             )
             with check_remains_sorted(A):
                 A[i0] = B[i0]
-                msg = "too many indices for array|tuple index out of range"
+                msg = "Too many indices for array|tuple index out of range"
                 with pytest.raises(IndexError, match=msg):
                     B.__getitem__(i1)
                 A[i2] = B[i2]
