@@ -49,14 +49,12 @@ class TestGetSet1D:
         assert A[1, None, :].shape == (1, 4)
         assert A[1, :, None].shape == (4, 1)
 
-        with pytest.raises(IndexError, match='Only 1D or 2D arrays'):
-            A[None, 2, 1, None, None]
-        with pytest.raises(IndexError, match='Only 1D or 2D arrays'):
-            A[None, 0:2, None, 1]
-        with pytest.raises(IndexError, match='Only 1D or 2D arrays'):
-            A[0:1, 1:, None]
-        with pytest.raises(IndexError, match='Only 1D or 2D arrays'):
-            A[1:, 1, None, None]
+        # output is >2D
+        if A.format == "coo":
+            assert A[None, 2, 1, None, None].shape == (1, 1, 1)
+            assert A[None, 0:2, None, 1].shape == (1,2,1)
+            assert A[0:1, 1:, None].shape == (1,3,1)
+            assert A[1:, 1, None, None].shape == (3,1,1)
 
     def test_getelement(self, spcreator):
         D = np.array([4, 3, 0])
