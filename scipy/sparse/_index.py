@@ -343,10 +343,13 @@ class IndexMixin:
 #            print(f"{len(arr_int_pos)=} {arr_int_pos=}\n{arr_int_pos[-1] - arr_int_pos[0] + 1=}")
 #            print(f" HHH {(len(arr_int_pos) != (arr_int_pos[-1] - arr_int_pos[0] + 1)) =}")
             if len(arr_int_pos) != (arr_int_pos[-1] - arr_int_pos[0] + 1):
+                print("Building new_shape as noncontiguous array (in front of slices)")
                 idx_shape = list(arr_shape) + idx_shape
             else:
-                arr_pos = array_indices[0]
+                print("Building new_shape as contiguous array in position")
+                arr_pos = arr_int_pos[0]
                 idx_shape = idx_shape[:arr_pos] + list(arr_shape) + idx_shape[arr_pos:]
+                print(f"{arr_pos=}")
         print(f"{idx_shape=}, {none_positions=}")
         print(f"{index=} {arr_int_pos=}")
         assert len(index) == self.ndim

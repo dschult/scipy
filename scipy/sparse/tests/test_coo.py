@@ -1246,12 +1246,14 @@ keys = [
     (np.array([1, 3]), slice(1, None), [0]),
     # fancy array indexing
     (np.array([1, 3]), slice(1, None), np.array([2, 4])),
-    (4, np.array([1, 3]), np.array([2, 4])),
+    (2, np.array([1, 3]), np.array([2, 4])),
     (np.array([1, 3]), np.array([2, 4]), 1),
     (np.array([1, 3]), np.array([2, 4]), [2]),
 ]
 
 @pytest.mark.parametrize(["A", "D", "idx"], [(A, D, idx) for idx in keys])
 def test_3d_coo_set(A, D, idx):
+    print(f"PRELIM: {A[idx].shape=} {D[idx].shape=}")
     D[idx] = A[idx] = -99 
+    print(f"{A.toarray()=}\n{D=}")
     assert_equal(A.toarray(), D)

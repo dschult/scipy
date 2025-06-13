@@ -640,6 +640,7 @@ class _coo_base(_data_matrix, _minmax_mixin, IndexMixin):
         else:
             arr_shape = None
             pos = -1
+        print(f"{arr_shape=} {pos=}")
 
         # get coords and data from RHS: x
         if issparse(x):
@@ -708,7 +709,7 @@ class _coo_base(_data_matrix, _minmax_mixin, IndexMixin):
 
         # handle integer array indices
         axis_order = list(range(len(self._shape)))
-        if pos == 0:
+        if arr_shape is not None and pos == 0:
             # non-contiguous positions: move all arrays to front
             # put arr_pos first and ignore later dup values
             axis_order = list(dict.fromkeys(arr_pos + axis_order))
@@ -722,7 +723,7 @@ class _coo_base(_data_matrix, _minmax_mixin, IndexMixin):
 #            # arr_co are positions in coord with matching index
 #            arr_ix, arr_co = found.nonzero()
 
-        new_coords = []
+        new_coords = [None] * len(axis_order)
         new_nnz = len(x_data)
         #
         x_coord_i = 0
@@ -733,7 +734,7 @@ class _coo_base(_data_matrix, _minmax_mixin, IndexMixin):
         for i in axis_order:
             idx = index[i]
             if isintlike(idx):
-                new_coords.append(np.broadcast_to(idx, (new_nnz,)))
+                new_coords[i] = (np.broadcast_to(idx, (new_nnz,)))
                 # don't bump x_co for int index
                 if arr_shape is not None:
                     print(f"{arr_shape=} {arr_pos=}")
@@ -743,16 +744,21 @@ class _coo_base(_data_matrix, _minmax_mixin, IndexMixin):
                         x_coord_i += 1
                         while x_coord_i in none_pos:
                             x_coord_i += 1
+                        print(f"bumped xcoord: {x_coord_i=}")
+                print(f"processed int {idx=}")
+                print(f"Order: {i=} {idx=} {new_coords[-1]=}")
                 continue
             elif isinstance(idx, slice):
                 start, stop, step = idx.indices(self.shape[i])
-                new_coords.append(start + x_coords[x_coord_i] * step)
+                new_coords[i] = (start + x_coords[x_coord_i] * step)
                 # bump to next x_coords entry
                 x_coord_i += 1
                 while x_coord_i in none_pos:
                     x_coord_i += 1
+                print(f"processed slice {idx=}")
+                print(f"bumped xcoord: {x_coord_i=}")
             else:  # array idx
-                new_coords.append(idx.ravel()[x_coords[x_coord_i]])
+                new_coords[i] = (idx.ravel()[x_coords[x_coord_i]])
                 print(f"appended repeat: {np.repeat(idx.ravel(), arr_repeat)=}")
                 print(f"{new_coords[-1]=}")
                 print(f"appended repeat: {np.repeat(idx.ravel(), arr_repeat)=}")
@@ -766,7 +772,10 @@ class _coo_base(_data_matrix, _minmax_mixin, IndexMixin):
                     x_coord_i += 1
                     while x_coord_i in none_pos:
                         x_coord_i += 1
+                    print(f"bumped xcoord: {x_coord_i=}")
                 #new_coords.append(np.repeat(idx.ravel(), arr_repeat))
+                print(f"processed array {idx=}")
+            print(f"Order: {i=} {idx=} {new_coords[-1]=}")
 #            # bump to next x_coords entry
 #            x_coord_i += 1
 #            while x_coord_i in none_pos:
