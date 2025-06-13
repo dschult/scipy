@@ -122,9 +122,9 @@ def test_1d_tuple_constructor_with_shape():
 def test_non_subscriptability():
     coo_2d = coo_array((2, 2))
 
-    with pytest.raises(TypeError,
-                       match="coo_array assignment is not implemented yet"):
-        coo_2d[0, 0] = 1
+    #with pytest.raises(TypeError,
+    #                   match="coo_array assignment is not implemented yet"):
+    coo_2d[0, 0] = 1
 
     # should not raise
     coo_2d[0, :]
@@ -1130,13 +1130,13 @@ def test_1d_coo_get():
     assert B[0] == 0
     assert B[4] == 4
 
-    np.testing.assert_equal(B[1:3].toarray(), B.toarray()[1:3])
-    np.testing.assert_equal(B[:3].toarray(), B.toarray()[:3])
-    np.testing.assert_equal(B[1:].toarray(), B.toarray()[1:])
-    np.testing.assert_equal(B[1:5:2].toarray(), B.toarray()[1:5:2])
+    assert_equal(B[1:3].toarray(), B.toarray()[1:3])
+    assert_equal(B[:3].toarray(), B.toarray()[:3])
+    assert_equal(B[1:].toarray(), B.toarray()[1:])
+    assert_equal(B[1:5:2].toarray(), B.toarray()[1:5:2])
 
-    np.testing.assert_equal(B[[1, 3, 4]].toarray(), B.toarray()[[1, 3, 4]])
-    np.testing.assert_equal(B[[3, 4, 1]].toarray(), B.toarray()[[3, 4, 1]])
+    assert_equal(B[[1, 3, 4]].toarray(), B.toarray()[[1, 3, 4]])
+    assert_equal(B[[3, 4, 1]].toarray(), B.toarray()[[3, 4, 1]])
 
 
 def test_2d_coo_get():
@@ -1145,17 +1145,17 @@ def test_2d_coo_get():
     assert B[0, 0] == 0
     assert B[3, 4] == 19
 
-    np.testing.assert_equal(B[1:3, 0].toarray(), B.toarray()[1:3, 0])
-    np.testing.assert_equal(B[2, 1:3].toarray(), B.toarray()[2, 1:3])
-    np.testing.assert_equal(B[:2, 1:5:3].toarray(), B.toarray()[:2, 1:5:3])
+    assert_equal(B[1:3, 0].toarray(), B.toarray()[1:3, 0])
+    assert_equal(B[2, 1:3].toarray(), B.toarray()[2, 1:3])
+    assert_equal(B[:2, 1:5:3].toarray(), B.toarray()[:2, 1:5:3])
 
-    np.testing.assert_equal(B[[1, 3], 0].toarray(), B.toarray()[[1,3], 0])
-    np.testing.assert_equal(B[2:, [1, 3]].toarray(), B.toarray()[2:, [1,3]])
-    np.testing.assert_equal(B[np.array([1, 3]), 0].toarray(), B.toarray()[[1,3], 0])
-    np.testing.assert_equal(B[2:, np.array([1, 3])].toarray(), B.toarray()[2:, [1,3]])
+    assert_equal(B[[1, 3], 0].toarray(), B.toarray()[[1,3], 0])
+    assert_equal(B[2:, [1, 3]].toarray(), B.toarray()[2:, [1,3]])
+    assert_equal(B[np.array([1, 3]), 0].toarray(), B.toarray()[[1,3], 0])
+    assert_equal(B[2:, np.array([1, 3])].toarray(), B.toarray()[2:, [1,3]])
 
-    np.testing.assert_equal(B[:, 0].toarray(), B.toarray()[:, 0])
-    np.testing.assert_equal(B[0, :].toarray(), B.toarray()[0, :])
+    assert_equal(B[:, 0].toarray(), B.toarray()[:, 0])
+    assert_equal(B[0, :].toarray(), B.toarray()[0, :])
 
 
 def test_3d_coo_get():
@@ -1163,12 +1163,95 @@ def test_3d_coo_get():
     assert A[0, 0, 0] == 0
     assert A[3, 4, 5] == 119
 
-    np.testing.assert_equal(A[0, 1:3, 0].toarray(), A.toarray()[0, 1:3, 0])
-    np.testing.assert_equal(A[0, 1:3, 3].toarray(), A.toarray()[0, 1:3, 3])
-    np.testing.assert_equal(A[:3, 1:5:2, 2:].toarray(), A.toarray()[:3, 1:5:2, 2:])
+    assert_equal(A[0, 1:3, 0].toarray(), A.toarray()[0, 1:3, 0])
+    assert_equal(A[0, 1:3, 3].toarray(), A.toarray()[0, 1:3, 3])
+    assert_equal(A[:3, 1:5:2, 2:].toarray(), A.toarray()[:3, 1:5:2, 2:])
 
-    np.testing.assert_equal(A[[1, 3], 0, 0].toarray(), A.toarray()[[1, 3], 0, 0])
-    np.testing.assert_equal(A[:2, 1:3, [1, 3]].toarray(), A.toarray()[:2, 1:3, [1, 3]])
+    assert_equal(A[[1, 3], 0, 0].toarray(), A.toarray()[[1, 3], 0, 0])
+    assert_equal(A[:2, 1:3, [1, 3]].toarray(), A.toarray()[:2, 1:3, [1, 3]])
 
-    np.testing.assert_equal(A[0, :, 0].toarray(), A.toarray()[0, :, 0])
-    np.testing.assert_equal(A[:, :, 0].toarray(), A.toarray()[:, :, 0])
+    assert_equal(A[0, :, 0].toarray(), A.toarray()[0, :, 0])
+    assert_equal(A[:, :, 0].toarray(), A.toarray()[:, :, 0])
+
+
+def test_1d_coo_set():
+    D = np.arange(9)
+    A = coo_array(D)
+
+    A[0] = D[0] = -1
+    assert_equal(A.toarray(), D)
+    A[4] = D[4] = -2
+    assert_equal(A.toarray(), D)
+
+    A[1:3] = D[1:3] = [-2, -3]
+    assert_equal(A.toarray(), D)
+    A[:3] = D[:3] = [-7, -8, -9]
+    assert_equal(A.toarray(), D)
+    A[1:] = D[1:] = -D[1:]
+    assert_equal(A.toarray(), D)
+    A[1:5:2] = D[1:5:2] = -D[1:5:2]
+    assert_equal(A.toarray(), D)
+
+    A[[1, 3, 4]] = D[[1, 3, 4]] = -D[[1, 3, 4]]
+    assert_equal(A.toarray(), D)
+    A[[3, 4, 1]] = D[[3, 4, 1]] = -D[[1, 2, 3]]
+    assert_equal(A.toarray(), D)
+
+
+def test_2d_coo_set():
+    D = np.arange(4 * 5).reshape((4, 5))
+    A = coo_array(D)
+
+    keys = [
+        # all int
+        (1, 3),
+        (-1, -3),
+        # slices and ints
+        (slice(1, 3, None), 0),
+        (2, slice(1, 3, None)),
+        (slice(1, 3, None), slice(1, 5, 3)),
+        (slice(None, None, -1), 2),
+        (1, slice(None)),
+        (Ellipsis,),
+        # array indexing
+        ([1, 3], 0),
+        (2, [1, 2]),
+        (np.array([1, 3]), slice(1, None)),
+        (slice(2), np.array([1, 2, 3])),
+        # fancy array indexing
+        (np.array([1, 3]), np.array([0, 2])),
+    ]
+    for idx in keys:
+        D[idx] = A[idx] = -D[idx]
+        print(f"A:{A.coords=}\n{A.data=}\n{A.toarray()=}")
+        assert_equal(A.toarray(), D)
+
+
+D = np.arange(4 * 5 * 6).reshape((4, 5, 6))
+A = coo_array(D)
+
+keys = [
+    # all ints
+    (0, 0, 0),
+    (3, -4, 5),
+    # slices and ints
+    (0, slice(1, 3), 0),
+    (slice(3, None), 3, slice(2)),
+    (slice(2), slice(1, 5, 2), slice(1, None)),
+    (slice(None, None, -1), slice(None), slice(1, 5, 2)),
+    (Ellipsis),
+    # array indexing
+    (2, [1, 2], slice(3)),
+    (np.array([1, 3]), slice(1, None), 0),
+    (np.array([1, 3]), slice(1, None), [0]),
+    # fancy array indexing
+    (np.array([1, 3]), slice(1, None), np.array([2, 4])),
+    (4, np.array([1, 3]), np.array([2, 4])),
+    (np.array([1, 3]), np.array([2, 4]), 1),
+    (np.array([1, 3]), np.array([2, 4]), [2]),
+]
+
+@pytest.mark.parametrize(["A", "D", "idx"], [(A, D, idx) for idx in keys])
+def test_3d_coo_set(A, D, idx):
+    D[idx] = A[idx] = -99 
+    assert_equal(A.toarray(), D)
