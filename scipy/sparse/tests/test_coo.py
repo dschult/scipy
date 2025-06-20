@@ -1218,33 +1218,34 @@ def test_1d_coo_set():
     assert_equal(A.toarray(), D)
 
 
-def test_2d_coo_set():
-    D = np.arange(4 * 5).reshape((4, 5))
-    A = coo_array(D)
+D = np.arange(4 * 5).reshape((4, 5))
+A = coo_array(D)
 
-    keys = [
-        # all int
-        (1, 3),
-        (-1, -3),
-        # slices and ints
-        (slice(1, 3, None), 0),
-        (2, slice(1, 3, None)),
-        (slice(1, 3, None), slice(1, 5, 3)),
-        (slice(None, None, -1), 2),
-        (1, slice(None)),
-        (Ellipsis,),
-        # array indexing
-        ([1, 3], 0),
-        (2, [1, 2]),
-        (np.array([1, 3]), slice(1, None)),
-        (slice(2), np.array([1, 2, 3])),
-        # fancy array indexing
-        (np.array([1, 3]), np.array([0, 2])),
-    ]
-    for idx in keys:
-        D[idx] = A[idx] = -D[idx]
-        print(f"A:{A.coords=}\n{A.data=}\n{A.toarray()=}")
-        assert_equal(A.toarray(), D)
+keys = [
+    # all int
+    (1, 3),
+    (-1, -3),
+    # slices and ints
+    (slice(1, 3, None), 0),
+    (2, slice(1, 3, None)),
+    (slice(1, 3, None), slice(1, 5, 3)),
+    (slice(None, None, -1), 2),
+    (1, slice(None)),
+    (Ellipsis,),
+    # array indexing
+    ([1, 3], 0),
+    (2, [1, 2]),
+    (np.array([1, 3]), slice(1, None)),
+    (slice(2), np.array([1, 2, 3])),
+    # fancy array indexing
+    (np.array([1, 3]), np.array([0, 2])),
+]
+
+@pytest.mark.parametrize(["A", "D", "idx"], [(A, D, idx) for idx in keys])
+def test_2d_coo_set(A, D, idx):
+    D[idx] = A[idx] = -D[idx]
+    print(f"A:{A.coords=}\n{A.data=}\n{A.toarray()=}")
+    assert_equal(A.toarray(), D)
 
 
 D = np.arange(4 * 5 * 6).reshape((4, 5, 6))
