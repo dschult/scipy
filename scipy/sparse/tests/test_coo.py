@@ -1285,34 +1285,56 @@ A = coo_array(D)
 
 keys = [
     # multidimensional
-    (1, 2, 1),
-    (..., 0),
-    (1, ...),
-    (1, ..., 0),
+    ("all ints", (1, 2, 1)),
+    ("ellipsis first", (..., 0)),
+    ("ellipsis last", (1, ...)),
+    ("ellipsis middle", (1, ..., 0)),
     # slices and ints
-    (slice(None, 4, None), 2, 1, slice(None, None, None), 1),
-    (slice(4, None, None), slice(None, None, None), 2, 1, 1),
-    (2, 1, 1, slice(4, None, None), slice(None, None, None)),
-    (slice(4, 4, None), slice(None, None, None), 2, 1, 1),
+    ("split ints", (slice(None, 4, None), 2, 1, slice(None, None, None), 1)),
+    ("contiguous ints last", (slice(4, None, None), slice(None, None, None), 2, 1, 1)),
+    ("contiguous ints first", (2, 1, 1, slice(4, None, None), slice(None, None, None))),
+    ("empty slice", (slice(4, 4, None), slice(None, None, None), 2, 1, 1)),
     # slices and arrays and ints
-    (slice(None, 4, None), [[2, 1, 1], [2, 1, 2]], [[2, 1, 0], [3, 4, 0]],
-        slice(None, None, None), 0),
-    (slice(None, 4, None), [[2, 1, 0], [2, 1, 2]], [[2, 1, 0], [3, 4, 0]],
-        slice(None, None, None), 1),
-    (slice(None, 4, None), [[2, 1, 0], [2, 1, 2]], [[2, 1, 0], [3, 4, 0]],
-        1, slice(None, None, None)),
-    (slice(None, 4, None), [2, 1, 0], [2, 1, 0], slice(None, None, None), 1),
+    ("split 2d arrays and ints",
+        (slice(None, 4, None), [[2, 1, 1], [2, 1, 2]], [[2, 1, 0], [3, 4, 0]],
+         slice(None, None, None), 0)
+    ),
+    ("contiguous 2d arrays and ints",
+        (slice(None, 4, None), [[2, 1, 0], [2, 1, 2]], [[2, 1, 0], [3, 4, 0]],
+         1, slice(None, None, None))
+    ),
+    ("split 1d arrays and ints",
+        (slice(None, 4, None), [2, 1, 0], [2, 1, 0], slice(None, None, None), 1)
+    ),
+    ("split ints, broadcast arrays, slice step not 1",
+        (0, slice(1, 4, 2), 1, [[2, 1, 0]], [[2], [1], [0]])
+    ),
+    ("contiguous broadcast arrays",
+        (slice(None, 3, None), slice(1, 4, 2), 1, [[2, 1, 0]], [[2], [1], [0]])
+    ),
+    ("contiguous arrays first",
+        ([[2, 1, 0]], [[2], [1], [0]], 0, slice(1, 4, 2), slice(None, 3, None))
+    ),
+    ("split arrays some first, some last",
+        ([[2, 1, 0]], slice(1, 4, 2), slice(None, 3, None), 0, [[2], [1], [0]])
+    ),
     # test that we are not creating duplicate entries for duplicate values in array index
-    (slice(None, 4, None), [[2, 1, 0], [2, 1, 1]], [[2, 1, 0], [3, 4, 4]], slice(None, None, None), 1),
+    ("duplicate array entries, split arrays",
+        (slice(None, 4, None), [[2, 1, 0], [2, 1, 1]], [[2, 1, 0], [3, 4, 4]],
+         slice(None, None, None), 1)
+    ),
+    ("duplicate array entries, contiguous broadcast arrays",
+        (slice(1, 4, 2), 0, 1, [[2, 1, 1]], [[2], [1], [1]])
+    ),
     ]
 
-@pytest.mark.parametrize(["A", "D", "idx"], [(A, D, idx) for idx in keys])
-def test_5d_coo_set(A, D, idx):
-    print(f"PRELIM: {A[idx].shape=} {D[idx].shape=}")
-    D[idx] = A[idx] = -99
+@pytest.mark.parametrize(["A", "D", "ix", "msg"], [(A, D, ix, msg) for msg, ix in keys])
+def test_5d_coo_set(A, D, ix, msg):
+    print(f"PRELIM: {A[ix].shape=} {D[ix].shape=}")
+    D[ix] = A[ix] = -99
 #    print(f"{A.toarray()=}\n{D=}")
     print(f"{(A == -99).nonzero()=}")
     print(f"{(A==-99).nonzero()[0].shape=}")
     print(f"{(D == -99).nonzero()=}")
     print(f"{(D==-99).nonzero()[0].shape=}")
-    assert_equal(A.toarray(), D)
+    assert_equal(A.toarray(), D, err_msg=f"\nTest of: {msg}\n")
