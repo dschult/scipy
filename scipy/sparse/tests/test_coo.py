@@ -1174,6 +1174,26 @@ def test_3d_coo_get():
     assert_equal(A[:, :, 0].toarray(), A.toarray()[:, :, 0])
 
 
+def test_newaxis_get():
+    A = coo_array(np.arange(4 * 5 * 6).reshape((4, 5, 6)))
+    assert_equal(A[:5, 3:, 1].toarray(), A.toarray()[:5, 3:, 1])
+    assert_equal(A[None, :5, 1:3, None, 1].toarray(), A.toarray()[None, :5, 1:3, None, 1])
+    assert_equal(A[None, :5, 3:, 1, None].toarray(), A.toarray()[None, :5, 3:, 1, None])
+    assert_equal(A[None, :5, ..., None].toarray(), A.toarray()[None, :5, ..., None])
+
+
+def test_newaxis_set():
+    D = np.arange(4 * 5 * 6).reshape((4, 5, 6))
+    A = coo_array(D)
+
+    A[None, 3:, 1] = D[None, 3:, 1] = 5
+    assert_equal(A.toarray(), D)
+    A[3:, 1, None] = D[3:, 1, None] = 7
+    assert_equal(A.toarray(), D)
+    A[3:, None, 1] = D[3:, None, 1] = 3
+    assert_equal(A.toarray(), D)
+
+
 def test_1d_coo_set():
     D = np.arange(9)
     A = coo_array(D)
@@ -1254,6 +1274,45 @@ keys = [
 @pytest.mark.parametrize(["A", "D", "idx"], [(A, D, idx) for idx in keys])
 def test_3d_coo_set(A, D, idx):
     print(f"PRELIM: {A[idx].shape=} {D[idx].shape=}")
-    D[idx] = A[idx] = -99 
+    D[idx] = A[idx] = -99
     print(f"{A.toarray()=}\n{D=}")
+    assert_equal(A.toarray(), D)
+
+
+#D = np.arange(4 * 5 * 6 * 4 * 6).reshape((4, 5, 6, 4, 6))
+D = np.arange(4 * 6 * 6 * 3 * 4).reshape((4, 6, 6, 3, 4))
+A = coo_array(D)
+
+keys = [
+    # multidimensional
+    (1, 2, 1),
+    (..., 0),
+    (1, ...),
+    (1, ..., 0),
+    # slices and ints
+    (slice(None, 4, None), 2, 1, slice(None, None, None), 1),
+    (slice(4, None, None), slice(None, None, None), 2, 1, 1),
+    (2, 1, 1, slice(4, None, None), slice(None, None, None)),
+    (slice(4, 4, None), slice(None, None, None), 2, 1, 1),
+    # slices and arrays and ints
+    (slice(None, 4, None), [[2, 1, 1], [2, 1, 2]], [[2, 1, 0], [3, 4, 0]],
+        slice(None, None, None), 0),
+    (slice(None, 4, None), [[2, 1, 0], [2, 1, 2]], [[2, 1, 0], [3, 4, 0]],
+        slice(None, None, None), 1),
+    (slice(None, 4, None), [[2, 1, 0], [2, 1, 2]], [[2, 1, 0], [3, 4, 0]],
+        1, slice(None, None, None)),
+    (slice(None, 4, None), [2, 1, 0], [2, 1, 0], slice(None, None, None), 1),
+    # test that we are not creating duplicate entries for duplicate values in array index
+    (slice(None, 4, None), [[2, 1, 0], [2, 1, 1]], [[2, 1, 0], [3, 4, 4]], slice(None, None, None), 1),
+    ]
+
+@pytest.mark.parametrize(["A", "D", "idx"], [(A, D, idx) for idx in keys])
+def test_5d_coo_set(A, D, idx):
+    print(f"PRELIM: {A[idx].shape=} {D[idx].shape=}")
+    D[idx] = A[idx] = -99
+#    print(f"{A.toarray()=}\n{D=}")
+    print(f"{(A == -99).nonzero()=}")
+    print(f"{(A==-99).nonzero()[0].shape=}")
+    print(f"{(D == -99).nonzero()=}")
+    print(f"{(D==-99).nonzero()[0].shape=}")
     assert_equal(A.toarray(), D)
