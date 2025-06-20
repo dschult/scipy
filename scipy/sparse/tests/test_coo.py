@@ -1339,3 +1339,56 @@ def test_5d_coo_set(A, D, ix, msg):
     print(f"{(D == -99).nonzero()=}")
     print(f"{(D==-99).nonzero()[0].shape=}")
     assert_equal(A.toarray(), D, err_msg=f"\nTest of: {msg}\n")
+
+
+def test_bool_get():
+    D = np.arange(4 * 6 * 6 * 3 * 4).reshape((4, 6, 6, 3, 4))
+    A = coo_array(D)
+
+    assert_equal(A[D > 500].toarray(), D[D > 500])
+    assert_equal(A[D > 5000].toarray(), D[D > 5000])
+    assert_equal(A[D > -1].toarray(), D[D > -1])
+
+    assert_equal(A[A > 500].toarray(), D[D > 500])
+    assert_equal(A[A > 5000].toarray(), D[D > 5000])
+    assert_equal(A[A < -1].toarray(), D[D < -1])
+
+    bool0 = A[:, 0, 0, 0, 0] > 50
+    bool1 = A[0, :, 0, 0, 0] > 50
+
+    idx = (bool0, slice(2, 3, None), [1], slice(None, 2, 2), bool0)
+    idxnp = (bool0.toarray(), slice(2, 3, 1), [1], slice(0, 2, 2), bool0.toarray())
+    result = D[idxnp]
+    assert_equal(A[idx].toarray(), result)
+    assert_equal(A[idxnp].toarray(), result)
+
+    idx = (slice(2, 3, None), bool1, bool1, slice(None, 2, 2), [1])
+    idxnp = (slice(2, 3, None), bool1.toarray(), bool1.toarray(), slice(None, 2, 2), [1])
+    result = D[idxnp]
+    assert_equal(A[idx].toarray(), result)
+
+
+def test_bool_set():
+    D_orig = np.arange(4 * 6 * 6 * 3 * 4).reshape((4, 6, 6, 3, 4))
+    A_orig = coo_array(D_orig)
+
+    A, D = A_orig.copy(), D_orig.copy()
+    D[D > 500] = A[A > 500] = -33
+    assert_equal(A.toarray(), D)
+
+    A, D = A_orig.copy(), D_orig.copy()
+    D[D > 500] = A[A > 500] = -77
+    assert_equal(A.toarray(), D)
+
+    A, D = A_orig.copy(), D_orig.copy()
+    bool0 = A[:, 0, 0, 0, 0] > 50
+    bool1 = A[0, :, 0, 0, 0] > 50
+    idx = (bool0, slice(2, 3, None), [1], slice(None, 2, 2), bool0)
+    idxnp = (bool0.toarray(), slice(2, 3, 1), [1], slice(0, 2, 2), bool0.toarray())
+
+    D[idxnp] = A[idx] = -55
+    assert_equal(A.toarray(), D)
+
+    A, D = A_orig.copy(), D_orig.copy()
+    D[idxnp] = A[idxnp] = -88
+    assert_equal(A.toarray(), D)
