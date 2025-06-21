@@ -217,7 +217,7 @@ class IndexMixin:
 
         index : tuple of validated idx objects. bool arrays->nonzero(),
                 arrays broadcast, ints and slices as they are, Nones removed
-        requested shape : the shape of the indexed space, including Nones 
+        requested shape : the shape of the indexed space, including Nones
         arr_pos : position within index of all arrays or ints (for array fancy indexing)
         none_pos : insert positions to put newaxis coords in indexed space.
                    insert from left to right so positions are updated correctly.
@@ -255,7 +255,7 @@ class IndexMixin:
                 index_1st.append(ix)
                 prelim_ndim += ix.ndim
             elif issparse(idx):
-                # TODO: make sparse matrix indexing work for sparray
+                # TODO: make sparse indexing work for sparray
                 raise IndexError(
                     'Indexing with sparse matrices is not supported '
                     'except boolean indexing where matrix and index '
@@ -275,14 +275,13 @@ class IndexMixin:
             else:
                 index_1st = index_1st[:ellps_pos] + ellip_slices + index_1st[ellps_pos:]
 
-        print(f"{index_1st=}")
         # second pass (have processed ellipsis and preprocessed arrays)
         # pass 2:
         # note: integer arrays provide info for one axis even if >1D array.
         #       The shape of array affects outgoing(get)/incoming(set) shape only
         # - form `new_shape` (shape of outgo/incom-ing result of key
         # - form `index` (validated form of each slice/int/array index)
-        # - validate and make canonical: slice and int 
+        # - validate and make canonical: slice and int
         # - turn bool arrays to int arrays via `.nonzero()`
         # - collect positions of Newaxis/None in `none_positions`
         # - collect positions of "array or int" (int is array for fancy indexing)
@@ -290,8 +289,8 @@ class IndexMixin:
         idx_shape = []
         index_ndim = 0
         index = []
-        none_positions = []  # store arrays
-        array_indices = []  # store arrays
+        array_indices = []
+        none_positions = []
         arr_int_pos = []  # track positions of arrays and integers
 
         for i, idx in enumerate(index_1st):
@@ -340,18 +339,11 @@ class IndexMixin:
 
             # array_indices implies arr_int_pos has at least one element
             # if arrays and ints not adjacent, move to front of shape
-#            print(f"{len(arr_int_pos)=} {arr_int_pos=}\n{arr_int_pos[-1] - arr_int_pos[0] + 1=}")
-#            print(f" HHH {(len(arr_int_pos) != (arr_int_pos[-1] - arr_int_pos[0] + 1)) =}")
             if len(arr_int_pos) != (arr_int_pos[-1] - arr_int_pos[0] + 1):
-                print("Building new_shape as noncontiguous array (in front of slices)")
                 idx_shape = list(arr_shape) + idx_shape
             else:
-                print("Building new_shape as contiguous array in position")
                 arr_pos = arr_int_pos[0]
                 idx_shape = idx_shape[:arr_pos] + list(arr_shape) + idx_shape[arr_pos:]
-                print(f"{arr_pos=}")
-        print(f"{idx_shape=}, {none_positions=}")
-        print(f"{index=} {arr_int_pos=}")
         assert len(index) == self.ndim
         return tuple(index), tuple(idx_shape), arr_int_pos, none_positions
 
@@ -366,9 +358,8 @@ class IndexMixin:
             raise IndexError('invalid index') from e
 
         if x.ndim not in (1, 2):
-            print("X.NDIM: ", x.ndim)
             if self.format != "coo":
-                raise IndexError('Index dimension must be 1 or 2')
+                raise IndexError(f'Index dimension must be 1 or 2. Got {x.ndim}')
 
         if x.size == 0:
             return x

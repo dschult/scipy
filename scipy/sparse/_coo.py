@@ -527,18 +527,7 @@ class _coo_base(_data_matrix, _minmax_mixin, IndexMixin):
         return self.__class__((data, coords), shape=self.shape, dtype=data.dtype)
 
     def __getitem__(self, key):
-        index, new_shape, arr_pos, none_pos = self._validate_indices(key)
-
-#        # handle bool array indices
-#        if len(index) == 1:
-#            idx = index[0]
-#            if isdense(idx) and idx.dtype.type == 'b':
-#                coords = idx.nonzero()
-#                # need to sort to find which match the nnz coords values
-#                raise NotImplementedError("boolean dense indexing not yet supported")
-#            if issparse(idx) and idx.dtype.type == 'b':
-#                coords = idx.tocoo().coords()
-#                raise NotImplementedError("boolean dense indexing not yet supported")
+        index, new_shape, arr_int_pos, none_pos = self._validate_indices(key)
 
         # handle int, slice and int-array indices
         accum=np.ones(len(self.data), dtype=np.bool)
@@ -573,10 +562,7 @@ class _coo_base(_data_matrix, _minmax_mixin, IndexMixin):
             return self.data[accum].sum().astype(self.dtype, copy=False)
 
         new_coords = [co[accum] for co in slice_coords]
-        print(f"After slices: {self.data=} {accum=}")
         new_data = self.data[accum]
-        print(f"After slices2: {new_data=} {new_coords=}")
-#        print(f"{[len(co) for co in new_coords]=} {[len(co) for co in slice_coords]=}")
 
         # handle array indices
         if arr_indices:
@@ -588,61 +574,48 @@ class _coo_base(_data_matrix, _minmax_mixin, IndexMixin):
             arr_coords = np.array([co[accum] for co in arr_coords])
             # found is arr_size x old_NNZ. True means coords match all arr_indices
             found = (keyarr[:, None, :] == arr_coords.T).all(axis=2)
-
             arr_ix, arr_co = found.nonzero()
             new_data = new_data[arr_co]
             new_coords = [co[arr_co] for co in new_coords]
             new_arr_coords = list(np.unravel_index(arr_ix, shape=arr_shape))
 
-            # prepend array index shape? (non-adjacent array indices)
-            if len(arr_pos) != arr_pos[-1] - arr_pos[0] + 1:
-                # new_coords is coords for nonzero values with array part of new_coords
-                new_coords = new_arr_coords + new_coords
-            else:  # put all array index shape at position of array indices
-#                print(f"HHHHH\n{arr_ix=}\n{new_arr_coords=}\nHHHH")
-                pos = arr_pos[0]
-#                print(f"{pos=} {new_coords[:pos]=}\n{new_arr_coords=}\n{index=}")
+            # check for contiguous positions of array and int indices
+            if len(arr_int_pos) == arr_int_pos[-1] - arr_int_pos[0] + 1:
+                # Contiguous. Put all array index shape at pos of array indices
+                pos = arr_int_pos[0]
                 new_coords = new_coords[:pos] + new_arr_coords + new_coords[pos:]
+            else:
+                # Not contiguous. Put all array coords at front
+                new_coords = new_arr_coords + new_coords
 
         if none_pos:
             if new_coords:
                 coord_like = new_coords[0]
             else:
                 coord_like = np.zeros(len(new_data), dtype=self.coords[0].dtype)
-            print(f"BEFORE:{none_pos=} {coord_like=} {new_coords=} {new_data=}")
             for i in none_pos:
                 new_coords.insert(i, np.zeros_like(coord_like))
-            print(f"{none_pos=} {coord_like=} {new_coords=} {new_data=}")
-        print(f"{none_pos=} {new_shape=} {key=}")
-        assert len(new_coords) == len(new_shape), f"{new_coords=} {new_shape=}"
-#        print(f"{[len(co) for co in new_coords]=} {len(new_data)=}")
-        coo = coo_array((new_data, new_coords), shape=new_shape, dtype=self.dtype)
-#        print(f"{coo.shape=} {new_shape=}")
-#        print(f"{key=} {self=}")
-        return coo
+        return coo_array((new_data, new_coords), shape=new_shape, dtype=self.dtype)
 
     def __setitem__(self, key, x):
-        # enact A[key] = x
-#        raise TypeError("coo_array assignment is not implemented yet")
-        index, new_shape, arr_pos, none_pos = self._validate_indices(key)
-        print(f"\nStarting setitem:\n{key=}\n{x=}")
-        print(f"{self.shape=} {self.nnz=}\n{new_shape=}\n{new_shape=}")
+        # enact self[key] = x
+        index, new_shape, arr_int_pos, none_pos = self._validate_indices(key)
 
-        # remove None's at beginning of index. Must not impact indexing coords
-        # and will align with x_coord columns if not removed.
+        # remove None's at beginning of index. Should not impact indexing coords
+        # and will mistakenly align with x_coord columns if not removed.
         if none_pos:
             new_shape = list(new_shape)
             for j in none_pos[::-1]:
                 new_shape.pop(j)
             new_shape = tuple(new_shape)
 
-        # get coords and data from x (based on 2d sparse setitem)
+        # get coords and data from x
         if issparse(x):
             if 0 in x.shape:
                 return
             x = x.tocoo()
             x.sum_duplicates()
-            ####x.reshape(x._shape_as_2d, copy=True)
+
             x_coords = list(x.coords)
             x_data = x.data.astype(self.dtype, copy=False)
             x_shape = x.shape
@@ -655,7 +628,7 @@ class _coo_base(_data_matrix, _minmax_mixin, IndexMixin):
                     x_coords = tuple([coord_zeros] * len_diff + x_coords)
                 # taking away axes (squeezing) is not part of broadcasting, but long
                 # spmatrix history of using 2d vectors in 1d space, so we manually
-                # squeeze the front and back axes here
+                # squeeze the front and back axes here to be compatible
                 if len_diff < 0:
                     for _ in range(-len_diff):
                         if x_shape[0] == 1:
@@ -667,8 +640,6 @@ class _coo_base(_data_matrix, _minmax_mixin, IndexMixin):
                         else:
                             raise ValueError("shape mismatch in assignment")
                 # broadcast with copy (will need to copy eventually anyway)
-                print(f"Going into broadcasting: {new_shape=} {x_shape=}")
-                print(f"{x_coords=}\n{x_data=}")
                 tot_expand = 1
                 for i, (nn, nx) in enumerate(zip(new_shape, x_shape)):
                     if nn == nx:
@@ -682,250 +653,107 @@ class _coo_base(_data_matrix, _minmax_mixin, IndexMixin):
                             continue
                         x_coords[j] = np.tile(co, nn)
                     tot_expand *= nn
-                    print(f"Axis {i}: {x_coords=}")
                 x_data = np.tile(x_data.ravel(), tot_expand)
-            print(f"Broadcasted x:\n{x_coords=}\n{x_data=}")
         else:  # handle arraylike x
             x = np.asarray(x, dtype=self.dtype)
-            print(f"Now x is an array: {x=}")
             if x.size == 0:
                 return
-            print(f"{x.shape=} {new_shape=}")
             if x.shape != new_shape:
-                print(f"x before broadcast: {x=}")
                 x = np.broadcast_to(x.squeeze(), new_shape)
-                print(f"x.shape after broadcast: {x.shape=}")
             # shift scalar input to 1d so has coords
             if new_shape == ():
                 x_coords = tuple([np.array([0])] * len(new_shape))
                 x_data = x.ravel()
             else:
-                print(f"Beefing up x_coords {x=}")
                 x_coords = x.nonzero()
                 x_data = x[x_coords]
-        print(f"{x_coords=}\n{x_data=}")
 
         # approach:
-        # set indexed values to zero by dropping from `self.coords` and `self.data`
-        # create new coords and data arrays for set nonzeros
-        # concatenate them together
+        # set indexed values to zero (drop from `self.coords` and `self.data`)
+        # create new coords and data arrays for setting nonzeros
+        # concatenate old (undropped) values with new coords and data
 
-        print("Finding coords/data to drop from sparray")
-        old_data, old_coords, arr_repeat = self._zero_many(index, new_shape, arr_pos)
-        print("Done dropping data/coords")
+        old_data, old_coords = self._zero_many(index)
 
         if len(x_coords) == 1 and len(x_coords[0]) == 0:
             self.data, self.coords = old_data, old_coords
             return 
-#        # handle int, slice
-#        changed_mask = np.ones(len(self.data), dtype=np.bool)
-#        slice_coords = []
-#        slice_new_coords = []
-#        arr_coords = []
-#        arr_indices = []
-#        new_array_ix = []
-#        for i, (idx, co) in enumerate(zip(index, self.coords)):
-#            if isinstance(idx, int):
-#                changed_mask &= (co == idx)
-#                arr_coords.append(np.broadcast_to(idx, (self.shape[i],)))
-#            elif isinstance(idx, slice) and idx != slice(None):
-#                start, stop, step = idx.indices(self.shape[i])
-#                if step != 1:
-#                    if step < 0:
-#                        in_range = (co <= start) & (co > stop)
-#                    else:
-#                        in_range = (co >= start) & (co < stop)
-#                    new_ix, m = np.divmod(co - start, step)
-#                    changed_mask &= (m == 0) & in_range
-#                else:
-#                    in_range = (co >= start) & (co < stop)
-#                    new_ix = co - start
-#                    changed_mask &= in_range
-#                slice_coords.append(new_ix)
-#                #slice_new_coords.append(np.arange(start, stop, step))
-#                slice_new_coords.append(start + x_coords * step)
-#            elif isinstance(idx, slice) and idx == slice(None):
-#                slice_coords.append(co)
-#                #slice_new_coords.append(np.arange(*idx.indices(self.shape[i])))
-#                slice_new_coords.append(x_coords)
-#            else:  # array
-#                arr_coords.append(co)
-#                arr_indices.append(idx)
 
-        # find position and shape of array index portion of key
-        if arr_pos:
-            arr_shape = None
+        # To process array indices, need the x_coords for those axes
+        # and need to ravel the array part of x_coords to build new_coords
+        # Along the way, Find pos and shape of array-index portion of key.
+        # arr_shape is None and pos = -1 when no arrays are used as indices.
+        arr_shape = None
+        pos = -1
+        if arr_int_pos:
+            # Get arr_shape if any arrays are in the index.
+            # Also ravel the corresponding x_coords.
             for idx in index:
-                if not isintlike(idx) and not  isinstance(idx, slice):
+                if not isinstance(idx, slice) and not isintlike(idx):
                     arr_shape = idx.shape
+
+                    # Find x_coord pos of integer and array portion of index.
+                    # If contiguous put int and array axes at pos of those indices.
+                    # If not contiguous, put all int and array axes at pos=0.
+                    if len(arr_int_pos) == (arr_int_pos[-1] - arr_int_pos[0] + 1):
+                        pos = arr_int_pos[0]
+                    else:
+                        pos = 0
+
+                    # compute the raveled coords of the array part of x_coords.
+                    # Used to build the new coords from the index arrays.
+                    x_arr_coo = x_coords[pos:pos + len(arr_shape)]
+                    # could call np.ravel_multi_index but _ravel_coords avoids some overflow
+                    x_arr_coo_ravel = _ravel_coords(x_arr_coo, arr_shape)
                     break
-            if len(arr_pos) != (arr_pos[-1] - arr_pos[0] + 1):
-                pos = 0
-            else:
-                pos = arr_pos[0]
-        else:
-            arr_shape = None
-            pos = -1
-        print(f"{arr_shape=} {pos=}")
 
-        # find map from x_coord axes to index axes
-        print("finding map from x_coord axes to index_axes")
-        slice_axes = []
-        arr_axes = []
+        # find map from x_coord slice axes to index axes
+        x_ax = 0
         x_axes = {}
-        if arr_shape is None:
-            print("arr_shape is None!!!!!!!!!!!!!!!!!!!!")
-            x_ax = 0
-            for i, idx in enumerate(index):
-                if isinstance(idx, slice):
-                    x_axes[i] = x_ax
-                    x_ax += 1
-        else:
-            print(f"{arr_shape=}!!!!!!!!!!!!!!!!!!!!")
-            x_ax = 0
-#            hit_array_yet = False
-            for i, idx in enumerate(index):
-                if i == pos:
-                    x_ax += len(arr_shape)
-                if isinstance(idx, slice):
-                    x_axes[i] = x_ax
-                    x_ax += 1
-#                elif not isintlike(idx) and idx is not None:
-#                    x_axes[i] = pos
-#                    if not hit_array_yet:
-#                        x_ax += len(arr_shape)
-#                        hit_array_yet = True
-                print(f"{i=} {idx=} {x_axes=} {x_ax=}")
-        print(f"Results: {x_axes=}\n{index=}\n{pos=} {arr_shape}")
+        for i, idx in enumerate(index):
+            if i == pos:
+                x_ax += len(arr_shape)
+            if isinstance(idx, slice):
+                x_axes[i] = x_ax
+                x_ax += 1
 
-        if arr_shape is not None:
-            x_arr_coo = x_coords[pos:pos + len(arr_shape)]
-            x_arr_coo_ravel = np.ravel_multi_index(x_arr_coo, arr_shape)
-            print(f"Found {x_arr_coo_ravel=}")
-
-#        axis_order = list(range(len(self._shape)))
-#        if arr_shape is not None:
-#            if pos == 0:
-#            # non-contiguous positions: move all arrays to front
-#            # put arr_pos first and ignore later dup values
-#                axis_order = list(dict.fromkeys(arr_pos + axis_order))
-#            else:
-#                axis_order = list(dict.fromkeys(axis_order[:pos] + arr_pos + axis_order))
-
-        # handle integer array indices
-#            # (already done)arr_shape = arr_indices[0].shape
-#            arr_indices = [idx for i, idx in enumerate(index) if i in arr_pos]
-#            self_coords = np.array(self.coords)
-#            keyarr = np.array(arr_indices).reshape(len(arr_indices), -1).T
-#            found = (keyarr[:, None, :] == self_coords.T).all(axis=2)
-#            # arr_ix are raveled index in idx-array for matching coord
-#            # arr_co are positions in coord with matching index
-#            arr_ix, arr_co = found.nonzero()
-
-#            x_arr_coords = []
-#            for idx in index:
-#                if idx is None or isintlike(idx) or isinstance(idx, slice):
-#                    continue
-#                x_arr_coords.append(idx)
-#            x_arr_co = np.ravel_multi_index(x_arr_coords, arr_shape)
-
+        # Build new_coords and new_data
         new_coords = [None] * self.ndim
         new_nnz = len(x_data)
-#        #
-#        x_coord_i = 0
-#        while x_coord_i in none_pos:
-#            x_coord_i += 1
-
-        idx_dim_count = 0
-        print("iterating over index:")
         for i, idx in enumerate(index):
-            print(f"Starting iteration {i} with {idx=}.")
             if isintlike(idx):
                 new_coords[i] = (np.broadcast_to(idx, (new_nnz,)))
-#                # don't bump x_co for int index
-#                if arr_shape is not None:
-#                    print(f"{arr_shape=} {arr_pos=}")
-#                    idx_dim_count += 1
-#                    if idx_dim_count == len(arr_pos):
-#                        # bump to next x_coords entry
-#                        x_coord_i += 1
-#                        while x_coord_i in none_pos:
-#                            x_coord_i += 1
-#                        print(f"bumped xcoord: {x_coord_i=}")
-                print(f"processed int {idx=}")
-                print(f"End of idx: Order: {i=} {idx=} {new_coords[i]=}")
                 continue
             elif isinstance(idx, slice):
                 start, stop, step = idx.indices(self.shape[i])
-                print(f"In slice: {i=} {idx=} {[co.shape for co in x_coords]=} {x_axes[i]=} {(start, stop, step)=}")
                 new_coords[i] = (start + x_coords[x_axes[i]] * step)
-                print(f"{[co.shape if co is not None else co for co in new_coords]=}")
-#                # bump to next x_coords entry
-#                x_coord_i += 1
-#                while x_coord_i in none_pos:
-#                    x_coord_i += 1
-                print(f"processed slice {idx=}")
-                print(f"xcoord: {x_axes[i]=} {i=}")
             else:  # array idx
-#                x_array_coords = x_coords[arr_pos]
-#                x_arr_coo = x_coords[pos:pos + len(arr_shape)]
-#                x_arr_coo_ravel = np.ravel_multi_index(x_arr_coo, arr_shape)
                 new_coords[i] = idx.ravel()[x_arr_coo_ravel]
-#                print(f"appended repeat: {np.repeat(idx.ravel(), arr_repeat)=}")
-#                print(f"{new_coords[i]=}")
-#                print(f"appended repeat: {np.repeat(idx.ravel(), arr_repeat)=}")
-#                print(f"{x_data=} {x_data.T=}")
-#                print(f"{x_coords=}\n{x_arr_coo=}\n{x_arr_coo_ravel=}")  #x_axes[i]=} {i=}")
-#                print(f"{index=}")
-#                print(f"{idx.ravel()[x_coords[x_coord_i]]=}")
-#                idx_dim_count += 1
-#                if idx_dim_count == len(arr_pos):
-#                    # bump to next x_coords entry
-#                    x_coord_i += 1
-#                    while x_coord_i in none_pos:
-#                        x_coord_i += 1
-#                    print(f"bumped xcoord: {x_coord_i=}")
-                #new_coords.append(np.repeat(idx.ravel(), arr_repeat))
-                print(f"processed array {idx=}")
-            print(f"End of idx: Order: {i=} {idx=} {[co.shape for co in new_coords if co is not None]=}")
-#            # bump to next x_coords entry
-#            x_coord_i += 1
-#            while x_coord_i in none_pos:
-#                x_coord_i += 1
-        print(f"{new_coords=}")
-        new_data = x_data
-        print(f"{new_data=}")
+        # seems like a copy is prudent when setting data in this array
+        new_data = x_data.copy()
 
         # deduplicate entries created by multiple coords matching in the array index
         # NumPy does not specify which value is put into the spot (last one assigned)
-        # But we should not add the values if we want to match NumPy.
+        # so only one value should appear if we want to match NumPy.
+        # If matching NumPy is not crucial, we could make dups a feature where 
+        # integer array indices  with repeated indices creates duplicate values.
+        # Not doing that here. We are just removing duplicates (keep 1st data found)
         new_coords = np.array(new_coords)
-        print(new_coords.shape)
         _, ind = np.unique(new_coords, axis=1, return_index=True)
-        deduped_coords = new_coords[:, ind]
-        deduped_data = new_data[ind]
 
-        data = np.hstack([old_data, deduped_data])
-        coords = tuple(
-            np.hstack(pairs) for pairs in zip(old_coords, deduped_coords)
-        )
-#        print(f"Ready: new: {new_data.shape=}\nnew: {new_coords.shape=}")
-#        print(f"Done: new: {data.shape=}\nnew: {[co.shape for co in coords]=}")
-#        print(f"old: {self.data=}\nold: {self.coords=}")
-        self.data=data
-        self.coords=tuple(coords)
-        return
+        # update values with stack of old and new data and coords.
+        self.data = np.hstack([old_data, new_data[ind]])
+        self.coords = tuple(np.hstack(c) for c in zip(old_coords, new_coords[:, ind]))
 
-    def _zero_many(self, index, new_shape, arr_pos):
-        # handle int, slice and int-array indices
+    def _zero_many(self, index):
+        # handle int, slice and integer-array indices
+        # accum accumulates a bool array of nonzeros that match index
         accum=np.ones(len(self.data), dtype=np.bool)
         arr_coords = []
         arr_indices = []
         for i, (idx, co) in enumerate(zip(index, self.coords)):
             if isinstance(idx, int):
-#                print(f"before int: {accum.nonzero()=}")
                 accum &= (co == idx)
-#                print(f"after int: {accum.nonzero()=}")
             elif isinstance(idx, slice) and idx != slice(None):
                 start, stop, step = idx.indices(self.shape[i])
                 if step != 1:
@@ -939,54 +767,27 @@ class _coo_base(_data_matrix, _minmax_mixin, IndexMixin):
                     in_range = (co >= start) & (co < stop)
                     accum &= in_range
             elif isinstance(idx, slice) and idx == slice(None):
+                # slice is full axis so no changes to accum
                 pass
             else:  # array
                 arr_coords.append(co)
                 arr_indices.append(idx)
 
-        # handle array indices
+        # array indices action on accum indicates which nozeros match array indices
         if arr_indices:
-#        # get assigned coords and data
-#        arr_coords = np.array(self.coords)
-#        found = (keyarr[:, None, :] == arr_coords.T
-#        unchanged_arr_coords=[co[~found.any(0)] for co in arr_coords]
-
-#            print(f"{accum.nonzero()=}")
             keyarr = np.array(arr_indices).reshape(len(arr_indices), -1).T
             short_arr_coords = np.array([co[accum] for co in arr_coords])
+            # found is arr_size x shortened_NNZ. True means coords match all arr_indices
             found = (keyarr[:, None, :] == short_arr_coords.T).all(axis=2)
-#            arr_accum = np.zeros_like(accum)
-#            arr_accum[found.sum(axis=1)] = True
-#            print(f"{found=}")
-#            print(f"{found.sum(axis=1)=}")
-#            print(f"{found.sum(axis=0)=}")
-#            print(f"{arr_accum.nonzero()=}")
-##            accum &= arr_accum
-#            print(f"{accum.nonzero()=}")
-            _, arr_co = found.nonzero()
-            arr_repeat = found.sum(axis=1)
-
-#            print(f"Matched at: {arr_co=}")
+            _, arr_coo = found.nonzero()
             arr_accum = np.zeros_like(accum)
-#            arr_accum[tuple(co[arr_co] for co in accum.nonzero())] = True
-            arr_accum[accum.nonzero()[0][arr_co]] = True
-#            print(f"Second try:{arr_accum.nonzero()=} {accum.sum()=} {arr_accum.sum()=}")
+            arr_accum[accum.nonzero()[0][arr_coo]] = True
             accum &= arr_accum
-#            print(f"{accum.nonzero()=}")
-            # NOTE: this should only work for array-only accum. 
-            # Let's figure out how to combine slices and arrays.
-            #accum &= arr_accum
-        else:
-            arr_repeat = []
 
         # remove matching coords and data to set them to zero
-        print(f"finishing zero_many: {accum.nonzero()[0].shape=}")
-#        print(f"{accum=}")
         pruned_coords = [co[~accum] for co in self.coords]
         pruned_data = self.data[~accum]
-#        print(f"{pruned_data=}\n{pruned_coords=}")
-        return pruned_data, pruned_coords, arr_repeat
-
+        return pruned_data, pruned_coords
 
     def sum_duplicates(self) -> None:
         """Eliminate duplicate entries by adding them together
