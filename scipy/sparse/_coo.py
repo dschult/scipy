@@ -677,6 +677,7 @@ class _coo_base(_data_matrix, _minmax_mixin, IndexMixin):
 
         if len(x_coords) == 1 and len(x_coords[0]) == 0:
             self.data, self.coords = old_data, old_coords
+            # leave self.has_canonical_format unchanged
             return 
 
         # To process array indices, need the x_coords for those axes
@@ -744,6 +745,7 @@ class _coo_base(_data_matrix, _minmax_mixin, IndexMixin):
         # update values with stack of old and new data and coords.
         self.data = np.hstack([old_data, new_data[ind]])
         self.coords = tuple(np.hstack(c) for c in zip(old_coords, new_coords[:, ind]))
+        self.has_canonical_format = False
 
     def _zero_many(self, index):
         # handle int, slice and integer-array indices
