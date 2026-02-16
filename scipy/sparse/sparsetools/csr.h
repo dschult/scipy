@@ -12,8 +12,6 @@
 
 template <class I, class T>
 struct csr_array {
-    const I n_row;
-    const I n_col;
     I *indptr;
     I *indices;
     T *data;
@@ -21,8 +19,6 @@ struct csr_array {
 
 template <class I, class T>
 struct const_csr_array {
-    const I n_row;
-    const I n_col;
     const I *indptr;
     const I *indices;
     const T *data;
@@ -707,21 +703,22 @@ void csr_matmat(const I n_row,
  *
  */
 template <class I, class T, class T2, class binary_op>
-void csr_binop_csr_general(const_csr_array<I,T> A,
+void csr_binop_csr_general(const I n_row, const I n_col,
+                           const_csr_array<I,T> A,
                            const_csr_array<I,T> B,
                            csr_array<I,T2> C,
                            const binary_op& op)
 {
     //Method that works for duplicate and/or unsorted indices
 
-    std::vector<I>  next(C.n_col,-1);
-    std::vector<T> A_row(C.n_col, 0);
-    std::vector<T> B_row(C.n_col, 0);
+    std::vector<I>  next(n_col,-1);
+    std::vector<T> A_row(n_col, 0);
+    std::vector<T> B_row(n_col, 0);
 
     I nnz = 0;
     C.indptr[0] = 0;
 
-    for(I i = 0; i < C.n_row; i++){
+    for(I i = 0; i < n_row; i++){
         I head   = -2;
         I length =  0;
 
@@ -796,7 +793,8 @@ void csr_binop_csr_general(const_csr_array<I,T> A,
  *
  */
 template <class I, class T, class T2, class binary_op>
-void csr_binop_csr_canonical(const_csr_array<I,T> A,
+void csr_binop_csr_canonical(const I n_row,
+                             const_csr_array<I,T> A,
                              const_csr_array<I,T> B,
                              csr_array<I,T2> C,
                              const binary_op& op)
@@ -806,7 +804,7 @@ void csr_binop_csr_canonical(const_csr_array<I,T> A,
     C.indptr[0] = 0;
     I nnz = 0;
 
-    for(I i = 0; i < C.n_row; i++){
+    for(I i = 0; i < n_row; i++){
         I A_pos = A.indptr[i];
         I B_pos = B.indptr[i];
         I A_end = A.indptr[i+1];
@@ -916,13 +914,13 @@ void csr_binop_csr(const I n_row,
                          T2 Cx[],
                    const binary_op& op)
 {
-    const_csr_array<I,T> A = {n_row, n_col, Ap, Aj, Ax};
-    const_csr_array<I,T> B = {n_row, n_col, Bp, Bj, Bx};
-    csr_array<I,T2> C = {n_row, n_col, Cp, Cj, Cx};
+    const_csr_array<I,T> A = {Ap, Aj, Ax};
+    const_csr_array<I,T> B = {Bp, Bj, Bx};
+    csr_array<I,T2> C = {Cp, Cj, Cx};
     if (csr_has_canonical_format(n_row,Ap,Aj) && csr_has_canonical_format(n_row,Bp,Bj))
-        csr_binop_csr_canonical(A, B, C, op);
+        csr_binop_csr_canonical(n_row, A, B, C, op);
     else
-        csr_binop_csr_general(A, B, C, op);
+        csr_binop_csr_general(n_row, n_col, A, B, C, op);
 }
 
 /* element-wise binary operations*/
