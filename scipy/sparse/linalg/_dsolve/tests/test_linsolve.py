@@ -605,7 +605,7 @@ class TestSplu:
         rng = np.random.RandomState(42)
         n = 500
         p = 0.01
-        A = random(n, n, p, random_state=rng)
+        A = random_array((n, n), density=p, random_state=rng)
         x = rng.rand(n)
         # Make A diagonal dominant to make sure it is not singular
         A += (n + 1) * eye_array(n)
