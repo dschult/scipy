@@ -30,6 +30,7 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
     def __init__(self, arg1, shape=None, dtype=None, copy=False, *, maxprint=None):
         _data_matrix.__init__(self, arg1, maxprint=maxprint)
 
+        print("constructing")
         if issparse(arg1):
             if arg1.format == self.format and copy:
                 arg1 = arg1.copy()
@@ -52,16 +53,20 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
                 self.indices = np.zeros(0, idx_dtype)
                 self.indptr = np.zeros(M + 1, dtype=idx_dtype)
             else:
+                print(f"got to tuple input check {len(arg1)=}", flush=True)
                 if len(arg1) == 2:
                     # (data, ij) format
                     coo = self._coo_container(arg1, shape=shape, dtype=dtype)
+                    print(f"made a coo version of the array\n{coo=}")
                     arrays = coo._coo_to_compressed(self._swap)
+                    print("arrays converted to compressed arrays")
                     self.indptr, self.indices, self.data, self._shape = arrays
                     self.sum_duplicates()
                 elif len(arg1) == 3:
                     # (data, indices, indptr) format
                     (data, indices, indptr) = arg1
 
+                    print("data, indices, indptr initialize", flush=True)
                     # Select index dtype large enough to pass array and
                     # scalar parameters to sparsetools
                     maxval = None
@@ -70,12 +75,14 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
                     idx_dtype = self._get_index_dtype((indices, indptr),
                                                 maxval=maxval,
                                                 check_contents=True)
+                    print(f"got index dtype: {idx_dtype=}", flush=True)
 
                     if not copy:
                         copy = copy_if_needed
                     self.indices = np.array(indices, copy=copy, dtype=idx_dtype)
                     self.indptr = np.array(indptr, copy=copy, dtype=idx_dtype)
                     self.data = np.array(data, copy=copy, dtype=dtype)
+                    print("got arrays", flush=True)
                 else:
                     raise ValueError(f"unrecognized {self.__class__.__name__} "
                                      f"constructor input: {arg1}")
@@ -96,6 +103,7 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
             arrays = coo._coo_to_compressed(self._swap)
             self.indptr, self.indices, self.data, self._shape = arrays
 
+        print("first part of construct")
         # Read matrix dimensions given, if any
         if shape is not None:
             self._shape = check_shape(shape, allow_nd=self._allow_nd)
@@ -113,6 +121,7 @@ class _cs_matrix(_data_matrix, _minmax_mixin, IndexMixin):
             newdtype = getdtype(dtype)
             self.data = self.data.astype(newdtype, copy=False)
 
+        print("checking format")
         self.check_format(full_check=False)
 
     def _getnnz(self, axis=None):

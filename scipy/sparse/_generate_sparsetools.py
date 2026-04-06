@@ -10,6 +10,7 @@ Type codes used:
     'I':  integer array
     'T':  data array
     'B':  boolean array
+    'C':  csr_struct <-> Python tuple
     'V':  std::vector<integer>*
     'W':  std::vector<data>*
     '*':  indicates that the next argument is an output argument
@@ -293,6 +294,8 @@ def parse_routine(name, args, types):
                 args.append(f"({const + T_type}*)a[{j}]")
             elif t == 'B':
                 args.append(f"(npy_bool_wrapper*)a[{j}]")
+            elif t == 'C':
+                args.append(f"(csr_struct<{const + I_type}, {const + T_type}>)a[{j}]")
             elif t == 'V':
                 if const:
                     raise ValueError("'V' argument must be an output arg")

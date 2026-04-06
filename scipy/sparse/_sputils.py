@@ -224,9 +224,8 @@ def safely_cast_index_arrays(A, idx_dtype=np.int32, msg=""):
             raise ValueError(f"indptr values too large for {msg}")
 
         # check shape vs dtype
-        if max(*A.shape) > max_value:
-            if (A.indices > max_value).any():
-                raise ValueError(f"indices values too large for {msg}")
+        if (max(A.shape) > max_value) or (A.indices > max_value).any():
+            raise ValueError(f"indices values too large for {msg}")
 
         indices = A.indices.astype(idx_dtype, copy=False)
         indptr = A.indptr.astype(idx_dtype, copy=False)
